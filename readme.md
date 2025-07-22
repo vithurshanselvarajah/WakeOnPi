@@ -37,6 +37,7 @@ sudo apt install python3-flask python3-opencv python3-picamera2
 ### 3. Configure Environment Variables
 
 ```bash
+sudo -i
 export MOTION_USERNAME=your_username
 export MOTION_PASSWORD=your_password
 sudo python3 wakeonpi.py
