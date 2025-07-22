@@ -34,13 +34,10 @@ sudo apt update
 sudo apt install python3-flask python3-opencv python3-picamera2
 ```
 
-### 3. Configure Environment Variables
+### 3. Launch the application
 
 ```bash
-sudo -i
-export MOTION_USERNAME=your_username
-export MOTION_PASSWORD=your_password
-sudo python3 wakeonpi.py
+sudo MOTION_USERNAME=your_username MOTION_PASSWORD=your_password python3 wakeonpi.py
 ```
 
 ---
@@ -62,13 +59,11 @@ Environment=MOTION_USERNAME=your_username
 Environment=MOTION_PASSWORD=your_password
 Restart=always
 RestartSec=5
-User=pi
+User=root
 
 [Install]
 WantedBy=multi-user.target
 ```
-
-> 🔒 You can also store credentials in `/etc/default/WakeOnPi` and load them using `EnvironmentFile=` for security.
 
 ### 2. Enable and Start the Service
 
