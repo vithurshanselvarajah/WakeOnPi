@@ -5,10 +5,8 @@ import select
 
 import cv2
 import numpy as np
-from flask import Flask, render_template_string, Response, request, stream_with_context
-from picamera2 import Picamera2, Preview, MappedArray
-from picamera2.encoders import MJPEGEncoder, Quality
-from picamera2.outputs import FileOutput
+from flask import Flask, Response, request, stream_with_context
+from picamera2 import Picamera2
 from libcamera import Transform
 
 
