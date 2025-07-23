@@ -47,7 +47,7 @@ video_config_full = picam2.create_video_configuration(
     main={"size": (1920, 1080), "format": "RGB888"},
     lores={"size": (320, 180), "format": "YUV420"},
     transform=Transform(vflip=True),
-    controls={"FrameRate": 30, "AwbMode": 0}
+    controls={"FrameRate": 10, "AwbMode": 0}
 )
 
 picam2.configure(video_config_lores)
@@ -109,9 +109,10 @@ def video_feed():
         try:
             while True:
                 frame = picam2.capture_array("main")
+                frame = cv2.resize(frame, (854, 480), interpolation=cv2.INTER_AREA)
                 with frame_lock:
                     current_frame = frame
-                ret, jpeg = cv2.imencode('.jpg', frame)
+                ret, jpeg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
                 if not ret:
                     continue
                 yield (b'--frame\r\n'
