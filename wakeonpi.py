@@ -8,6 +8,7 @@ import numpy as np
 from flask import Flask, Response, request, stream_with_context
 from picamera2 import Picamera2
 from libcamera import Transform
+from picamera2.encoders import H264Encoder
 
 
 # --- Config ---
@@ -26,6 +27,9 @@ clients_lock = threading.Lock()
 main_stream_active = False
 main_stream_lock = threading.Lock()
 ignore_motion_until = 0
+is_recording = False
+recording_lock = threading.Lock()
+recording_filename = None
 
 # --- Authentication Credentials ---
 USERNAME = os.environ.get("MOTION_USERNAME")
@@ -47,7 +51,7 @@ video_config_full = picam2.create_video_configuration(
     main={"size": (1920, 1080), "format": "RGB888"},
     lores={"size": (320, 180), "format": "YUV420"},
     transform=Transform(vflip=True),
-    controls={"FrameRate": 10, "AwbMode": 0}
+    controls={"FrameRate": 50, "AwbMode": 0}
 )
 
 picam2.configure(video_config_lores)
@@ -93,7 +97,7 @@ def requires_auth(f):
     decorated.__name__ = f.__name__  # Needed to avoid Flask route warnings
     return decorated
 
-# --- Flask App ---
+# --- WebPage ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -127,6 +131,84 @@ def video_feed():
 @app.route('/motion_alerts')
 def motion_alerts():
     return ('motion' if motion_event else 'nomotion'), 200, {'Content-Type': 'text/plain'}
+
+@app.route('/record')
+@requires_auth
+def record_page():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Camera Recorder</title>
+        <script>
+            function updateStatus() {
+                fetch('/record_status')
+                .then(response => response.text())
+                .then(status => {
+                    document.getElementById('status').innerText = status === 'recording' 
+                        ? 'Recording in progress' : 'Not recording';
+                    document.getElementById('recordBtn').innerText =
+                        status === 'recording' ? 'Stop Recording' : 'Start Recording';
+                });
+            }
+            function toggleRecord() {
+                fetch('/toggle_record', {method: 'POST'})
+                .then(response => response.text())
+                .then(msg => {
+                    document.getElementById('status').innerText = msg;
+                    updateStatus();
+                });
+            }
+            window.onload = updateStatus;
+        </script>
+    </head>
+    <body>
+        <h1>Camera Recording</h1>
+        <button id="recordBtn" onclick="toggleRecord()">Start Recording</button>
+        <p id="status">Checking status...</p>
+    </body>
+    </html>
+    '''
+
+# --- Toggle Recording Endpoint ---
+@app.route('/toggle_record', methods=['POST'])
+@requires_auth
+def toggle_record():
+    global is_recording, recording_filename, ignore_motion_until, main_stream_active
+    with recording_lock:
+        if not is_recording:
+            switch_to_full_mode()
+
+            # Setup encoder
+            encoder = H264Encoder(bitrate=10000000)
+            home_dir = os.path.expanduser("~")
+            recording_filename = os.path.join(home_dir, f"video_{int(time.time())}.h264")
+            picam2.start_recording(encoder, recording_filename)
+            is_recording = True
+            return "Recording started"
+        else:
+            picam2.stop_recording()
+            is_recording = False
+            ignore_motion_until = time.time() + 2  # prevent false positives
+
+            if clients_connected == 0:
+                print("Switching camera back to motion detection mode...")
+                picam2.configure(video_config_lores)
+                picam2.start()
+                main_stream_active = False
+            else:
+                print("Keeping camera in full stream mode for active viewers...")
+                picam2.configure(video_config_full)
+                picam2.start()
+                main_stream_active = True
+
+            return f"Recording stopped, saved as {recording_filename}"
+
+
+@app.route('/record_status')
+@requires_auth
+def record_status():
+    return ("recording" if is_recording else "not_recording"), 200, {'Content-Type': 'text/plain'}
 
 # --- Display Control ---
 def set_display(state):
