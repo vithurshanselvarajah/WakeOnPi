@@ -1,6 +1,6 @@
-# PiWake
+# WakeOnPi
 
-**PiWake** is a motion-activated streaming service for the Raspberry Pi 5, designed specifically for use with the official Raspberry Pi **Touch Display 2**. It provides a real-time camera feed over the network and automatically turns the display on when motion is detected — turning it off after a period of inactivity to save power and extend display lifespan.
+**WakeOnPi** is a motion-activated streaming service for the Raspberry Pi 5, designed specifically for use with the official Raspberry Pi **Touch Display 2**. It provides a real-time camera feed over the network and automatically turns the display on when motion is detected — turning it off after a period of inactivity to save power and extend display lifespan.
 
 ---
 
@@ -49,7 +49,7 @@ sudo MOTION_USERNAME=your_username MOTION_PASSWORD=your_password python3 wakeonp
 ```ini
 # /etc/systemd/system/wakeonpi.service
 [Unit]
-Description=PiWake - Motion-Aware Camera Stream & Display Controller
+Description= - Motion-Aware Camera Stream & Display Controller
 After=network.target
 
 [Service]
