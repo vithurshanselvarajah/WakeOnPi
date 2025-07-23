@@ -25,6 +25,7 @@ clients_connected = 0
 clients_lock = threading.Lock()
 main_stream_active = False
 main_stream_lock = threading.Lock()
+ignore_motion_until = 0
 
 # --- Authentication Credentials ---
 USERNAME = os.environ.get("MOTION_USERNAME")
@@ -55,17 +56,19 @@ picam2.start()
 # --- Switch Modes ---
 
 def switch_to_full_mode():
-    global main_stream_active
+    global main_stream_active, ignore_motion_until
     with main_stream_lock:
         if not main_stream_active:
+            ignore_motion_until = time.time() + 2
             print("Switching to full stream mode")
             picam2.switch_mode(video_config_full)
             main_stream_active = True
 
 def switch_to_lores_mode_if_needed():
-    global main_stream_active
+    global main_stream_active, ignore_motion_until
     with main_stream_lock:
         if main_stream_active and clients_connected == 0:
+            ignore_motion_until = time.time() + 2
             print("Switching back to lores mode")
             picam2.switch_mode(video_config_lores)
             main_stream_active = False
@@ -116,7 +119,8 @@ def video_feed():
         finally:
             with clients_lock:
                 clients_connected -= 1
-                switch_to_lores_mode_if_needed()
+                if clients_connected == 0:
+                    switch_to_lores_mode_if_needed()
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/motion_alerts')
@@ -135,7 +139,7 @@ def set_display(state):
 # --- Motion Detection Thread ---
 def motion_detection_loop():
     global motion_event, last_motion_time, display_on
-    prev_frame = None
+    prev_frame = None   
 
     def set_display_if_needed(state):
         global display_on
@@ -149,7 +153,7 @@ def motion_detection_loop():
         gray = lores_frame[:lores_frame.shape[0] // 3, :].copy()
         gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        if prev_frame is not None:
+        if prev_frame is not None and time.time() > ignore_motion_until:
             delta = cv2.absdiff(prev_frame, gray)
             _, thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)
             motion_score = cv2.countNonZero(thresh)
@@ -157,9 +161,13 @@ def motion_detection_loop():
             if motion_score > MOTION_THRESHOLD:
                 last_motion_time = time.time()
                 set_display_if_needed(True)
+                if not motion_event:
+                    print("Motion detected!")                
                 motion_event = True
             elif time.time() - last_motion_time > INACTIVITY_TIMEOUT:
                 set_display_if_needed(False)
+                if motion_event and not motion_logged:
+                    print("No motion detected.")                
                 motion_event = False
 
         prev_frame = gray
