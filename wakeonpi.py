@@ -43,10 +43,10 @@ video_config_lores = picam2.create_video_configuration(
 
 # Full-res config (for streaming)
 video_config_full = picam2.create_video_configuration(
-    main={"size": (1280, 720), "format": "RGB888"},
+    main={"size": (1920, 1080), "format": "RGB888"},
     lores={"size": (320, 180), "format": "YUV420"},
     transform=Transform(vflip=True),
-    controls={"FrameRate": 2, "AwbMode": 0}
+    controls={"FrameRate": 30, "AwbMode": 0}
 )
 
 picam2.configure(video_config_lores)
