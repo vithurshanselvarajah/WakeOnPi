@@ -163,7 +163,7 @@ def motion_detection_loop():
                 motion_event = False
 
         prev_frame = gray
-        select.select([], [], [], CHECK_INTERVAL)
+        time.sleep(CHECK_INTERVAL)
 
 # --- Start Threads ---
 threading.Thread(target=motion_detection_loop, daemon=True).start()
