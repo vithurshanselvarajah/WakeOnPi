@@ -160,14 +160,10 @@ def motion_detection_loop():
 
             if motion_score > MOTION_THRESHOLD:
                 last_motion_time = time.time()
-                set_display_if_needed(True)
-                if not motion_event:
-                    print("Motion detected!")                
+                set_display_if_needed(True)              
                 motion_event = True
             elif time.time() - last_motion_time > INACTIVITY_TIMEOUT:
-                set_display_if_needed(False)
-                if motion_event and not motion_logged:
-                    print("No motion detected.")                
+                set_display_if_needed(False)              
                 motion_event = False
 
         prev_frame = gray
