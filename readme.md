@@ -47,7 +47,7 @@ sudo MOTION_USERNAME=your_username MOTION_PASSWORD=your_password python3 wakeonp
 ### 1. Create a systemd Unit File (example)
 
 ```ini
-# /etc/systemd/system/piwake.service
+# /etc/systemd/system/wakeonpi.service
 [Unit]
 Description=PiWake - Motion-Aware Camera Stream & Display Controller
 After=network.target
@@ -69,8 +69,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable piwake
-sudo systemctl start piwake
+sudo systemctl enable wakeonpi
+sudo systemctl start wakeonpi
 ```
 
 ---
