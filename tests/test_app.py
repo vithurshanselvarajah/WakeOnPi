@@ -1,5 +1,9 @@
 import wakeonpi.app as app
 from flask import Flask
+import pytest
+
+
+pytest.skip("skipping test_app - disabled in CI due to hardware dependencies", allow_module_level=True)
 
 
 def test_get_local_ip_basic():
