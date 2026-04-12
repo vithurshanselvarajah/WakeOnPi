@@ -1,4 +1,5 @@
 import cv2
+import socket
 from flask import Flask, Response, stream_with_context, request, redirect, url_for
 
 from . import state
@@ -11,6 +12,20 @@ app = Flask(__name__)
 motion.start_motion_thread()
 mqtt.start()
 
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't actually send traffic
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+host = get_local_ip()
+port = 5000
 state.stream_url = f"http://{host}:{port}"
 mqtt.publish_stream_url(state.stream_url)
 
