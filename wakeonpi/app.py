@@ -52,13 +52,6 @@ def api_display():
     mqtt.publish_display(val)
     return ("OK", 200)
 
-@app.route("/stream_info")
-@requires_auth
-def stream_info():
-    url = url_for("video_feed", _external=True)
-    mqtt.publish_stream_url(url)
-    return {"stream_url": url}, 200
-
 @app.route("/")
 @requires_auth
 def video_feed():
