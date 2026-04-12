@@ -90,14 +90,14 @@ You'll be prompted to log in with the credentials you set via environment variab
 ## 📌 Display Compatibility
 
 - ✔️ Optimized for the **official Raspberry Pi Touch Display 2**
-- ✔️ Uses `/sys/class/backlight/11-0045/bl_power` for backlight control
+- ✔️ Uses `/sys/class/backlight/10-0045/bl_power` for backlight control
 - ❌ May not work as-is on HDMI or other non-standard displays
 
 > You can test backlight control manually with:
 
 ```bash
-echo 0 | sudo tee /sys/class/backlight/11-0045/bl_power  # Turn ON
-echo 1 | sudo tee /sys/class/backlight/11-0045/bl_power  # Turn OFF
+echo 0 | sudo tee /sys/class/backlight/10-0045/bl_power  # Turn ON
+echo 1 | sudo tee /sys/class/backlight/10-0045/bl_power  # Turn OFF
 ```
 
 ---

@@ -1,0 +1,8 @@
+[project]
+name = "WakeOnPi"
+version = "0.0.1"
+dependencies = [
+    "flask",
+    "numpy",
+    "opencv-python"
+]
