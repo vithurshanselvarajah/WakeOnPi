@@ -15,6 +15,7 @@ _client = None
 def _on_connect(client, userdata, flags, rc):
     prefix = config.MQTT_TOPIC_PREFIX
     client.subscribe(f"{prefix}/screen/set")
+    publish_stream_url(url)
 
 def _on_message(client, userdata, msg):
     try:
