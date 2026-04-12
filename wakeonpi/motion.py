@@ -10,6 +10,8 @@ from . import mqtt
 def motion_detection_loop():
     prev_frame = None
 
+    state.manual_display_override = False
+
     def set_display_if_needed(val):
         if val != state.display_on:
             set_display(val)
@@ -27,6 +29,11 @@ def motion_detection_loop():
             motion_score = cv2.countNonZero(thresh)
 
             is_motion = motion_score > config.MOTION_THRESHOLD
+
+            if state.manual_display_override:
+                prev_frame = gray
+                time.sleep(60)
+                continue
 
             if is_motion:
                 state.last_motion_time = time.time()

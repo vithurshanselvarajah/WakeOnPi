@@ -21,6 +21,7 @@ def _on_message(client, userdata, msg):
         payload = msg.payload.decode()
         if msg.topic.endswith("/screen/set"):
             val = payload.lower() in ("1", "true", "on", "open")
+            state.manual_display_override = True
             set_display(val)
             state.display_on = val
             publish_display(val)
