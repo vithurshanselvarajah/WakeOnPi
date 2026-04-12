@@ -11,6 +11,9 @@ app = Flask(__name__)
 motion.start_motion_thread()
 mqtt.start()
 
+state.stream_url = f"http://{host}:{port}"
+mqtt.publish_stream_url(state.stream_url)
+
 @app.route("/settings", methods=["GET", "POST"])
 @requires_auth
 def settings():
@@ -51,13 +54,6 @@ def api_display():
     state.display_on = val
     mqtt.publish_display(val)
     return ("OK", 200)
-
-@app.route("/stream_info")
-@requires_auth
-def stream_info():
-    url = url_for("video_feed", _external=True)
-    mqtt.publish_stream_url(url)
-    return {"stream_url": url}, 200
 
 @app.route("/")
 @requires_auth
