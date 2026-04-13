@@ -83,6 +83,17 @@ def motion_detection_loop():
                             log.exception("Error handling browser on motion event")
 
                 elif time.time() - state.last_motion_time > config.INACTIVITY_TIMEOUT:
+                    try:
+                        if browser is None:
+                            import wakeonpi.browser as browser_mod
+                            browser = browser_mod
+                        try:
+                            browser.pause()
+                        except Exception:
+                            log.exception("Failed to pause browser on inactivity timeout")
+                    except Exception:
+                        log.exception("Error importing/pausing browser on inactivity timeout")
+
                     set_display_if_needed(False)
                     if state.motion_event:
                         state.motion_event = False
