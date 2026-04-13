@@ -7,69 +7,28 @@ on:
 
 jobs:
   create-release:
+    # Use 'contains' or 'startsWith' depending on your preference
     if: ${{ startsWith(github.event.head_commit.message, 'release') }}
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from pyproject.toml
+      - name: Extract version
         id: prepare
         run: |
-          if [ ! -f pyproject.toml ]; then
-            echo "pyproject.toml not found"
-            exit 1
-          fi
-
-          VERSION_LINE=$(grep -E '^version\s*=\s*"' pyproject.toml | head -n1 || true)
-
-          if [ -n "$VERSION_LINE" ]; then
-            VERSION=$(echo "$VERSION_LINE" | sed -E 's/.*= *"([^"\r\n]+)".*/\1/')
-          else
-            VERSION=$(python - <<'PY'
-import tomllib, sys
-try:
-    d=tomllib.load(open('pyproject.toml','rb'))
-    v=d.get('tool',{}).get('poetry',{}).get('version') or d.get('project',{}).get('version')
-    if not v:
-        sys.exit(1)
-    print(v)
-except Exception:
-    sys.exit(1)
-PY
-)
-          fi
-
-          if [ -z "$VERSION" ]; then
-            echo "Version not found"
-            exit 1
-          fi
-
+          # Use grep to find the version in pyproject.toml
+          VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create tag
+      - name: Create GitHub Release
         run: |
-          VERSION=${{ steps.prepare.outputs.version }}
-          TAG="v${VERSION}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag already exists, skipping"
-            exit 0
-          fi
-
-          git tag -a "$TAG" -m "Release $VERSION"
-          git push origin "$TAG"
-
-      - name: Create GitHub release
-        run: |
-          gh release create "v${{ steps.prepare.outputs.version }}" \
-            --title "v${{ steps.prepare.outputs.version }}" \
-            --notes "Automated release for version ${{ steps.prepare.outputs.version }}"
+          TAG="v${{ steps.prepare.outputs.version }}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Automated release for version ${{ steps.prepare.outputs.version }}" \
+            --generate-notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
