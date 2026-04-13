@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>WakeOnPi Settings</title>
+    <style>
+      body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;background:#f7f7f7;color:#111}
+      .card{background:#fff;border-radius:8px;padding:20px;max-width:760px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+      label{display:block;margin-top:12px;font-weight:600}
+      input[type=text],input[type=number],input[type=password]{width:100%;padding:8px;margin-top:6px;border:1px solid #ddd;border-radius:6px}
+      button{margin-top:16px;padding:10px 14px;border-radius:6px;border:0;background:#0078d4;color:#fff;font-weight:600}
+      small{color:#666}
+      .row{display:flex;gap:12px}
+      .col{flex:1}
+      dl{margin:0}
+      dt{font-weight:600}
+      dd{margin-left:0;margin-bottom:12px}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>WakeOnPi Settings</h2>
+      <form method="post">
+        <div class="row">
+          <div class="col">
+            <label>MOTION_THRESHOLD <small>(integer)</small></label>
+            <input name="MOTION_THRESHOLD" type="number" value="{{ s['MOTION_THRESHOLD'] }}"/>
+          </div>
+          <div class="col">
+            <label>INACTIVITY_TIMEOUT <small>(seconds)</small></label>
+            <input name="INACTIVITY_TIMEOUT" type="text" value="{{ s['INACTIVITY_TIMEOUT'] }}"/>
+          </div>
+        </div>
+
+        <label>CHECK_INTERVAL <small>(seconds)</small></label>
+        <input name="CHECK_INTERVAL" type="text" value="{{ s['CHECK_INTERVAL'] }}"/>
+
+        <label>MQTT Host / Port</label>
+        <div class="row">
+          <div class="col">
+            <input name="MQTT_HOST" type="text" value="{{ s.get('MQTT_HOST') or '' }}" placeholder="localhost"/>
+          </div>
+          <div class="col">
+            <input name="MQTT_PORT" type="number" value="{{ s.get('MQTT_PORT') or '' }}"/>
+          </div>
+        </div>
+
+        <label>MQTT_TOPIC_PREFIX</label>
+        <input name="MQTT_TOPIC_PREFIX" type="text" value="{{ s.get('MQTT_TOPIC_PREFIX') or '' }}"/>
+
+        <label>MQTT_USERNAME</label>
+        <input name="MQTT_USERNAME" type="text" value="{{ s.get('MQTT_USERNAME') or '' }}"/>
+
+        <label>MQTT_PASSWORD <small>(sensitive — leave unchanged to keep current)</small></label>
+        <input name="MQTT_PASSWORD" type="password" value="{{ pwd_display }}" autocomplete="new-password"/>
+
+        <label>HASS_DASHBOARD_URL</label>
+        <input name="HASS_DASHBOARD_URL" type="text" value="{{ s.get('HASS_DASHBOARD_URL') or '' }}"/>
+
+        <button type="submit">Save settings</button>
+      </form>
+      <p style="margin-top:12px"><small>Sensitive values like passwords are not exposed. To keep an existing password, leave the password field unchanged.</small></p>
+
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #eee">
+        <h3>Status</h3>
+        <dl>
+          <dt>MQTT Connected</dt><dd>{{ 'Yes' if status.get('mqtt_connected') else 'No' }}</dd>
+          <dt>MQTT Host</dt><dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
+          <dt>MQTT Topic Prefix</dt><dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
+          <dt>Browser Running</dt><dd>{{ 'Yes' if status.get('browser_running') else 'No' }}</dd>
+          <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }}</dd>
+          <dt>Browser Current URL</dt><dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
+          <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
+          <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
+          <dt>Stream URL</dt><dd>{{ status.get('stream_url') or 'N/A' }}</dd>
+          <dt>Clients Connected</dt><dd>{{ status.get('clients_connected') or 0 }}</dd>
+        </dl>
+      </div>
+    </div>
+  </body>
+</html>
