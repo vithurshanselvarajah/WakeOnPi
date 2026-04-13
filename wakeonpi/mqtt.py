@@ -266,14 +266,14 @@ def _publish_ha_discovery(prefix):
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
-        "manufacturer": "WakeOnPi",
-        "model": "WakeOnPi",
+        "manufacturer": "VithuselServices",
+        "model": "Raspberry Pi",
     }
 
     try:
         motion_topic = f"{prefix}/state/motion"
         payload = {
-            "name": f"{prefix} Motion",
+            "name": f"Motion",
             "state_topic": motion_topic,
             "payload_on": "ON",
             "payload_off": "OFF",
@@ -288,7 +288,7 @@ def _publish_ha_discovery(prefix):
         cmd_topic = f"{prefix}/command/screen/set"
         state_topic = f"{prefix}/state/screen"
         payload = {
-            "name": f"{prefix} Screen",
+            "name": f"Screen",
             "command_topic": cmd_topic,
             "state_topic": state_topic,
             "payload_on": "ON",
@@ -304,7 +304,7 @@ def _publish_ha_discovery(prefix):
         stream = getattr(state, 'stream_url', None)
         if stream:
             payload = {
-                "name": f"{prefix} Stream",
+                "name": f"Stream",
                 "mjpeg_url": stream,
                 "unique_id": f"{prefix}_camera",
                 "device": device,
@@ -316,7 +316,7 @@ def _publish_ha_discovery(prefix):
     try:
         uptime_topic = f"{prefix}/state/system/uptime"
         payload = {
-            "name": f"{prefix} Uptime",
+            "name": f"Uptime",
             "state_topic": uptime_topic,
             "unit_of_measurement": "s",
             "unique_id": f"{prefix}_uptime",
@@ -329,7 +329,7 @@ def _publish_ha_discovery(prefix):
     try:
         version_topic = f"{prefix}/state/system/version"
         payload = {
-            "name": f"{prefix} Version",
+            "name": f"Version",
             "state_topic": version_topic,
             "unique_id": f"{prefix}_version",
             "device": device,
@@ -341,7 +341,7 @@ def _publish_ha_discovery(prefix):
     try:
         browser_topic = f"{prefix}/state/browser/current_page"
         payload = {
-            "name": f"{prefix} Browser Page",
+            "name": f"Browser Page",
             "state_topic": browser_topic,
             "unique_id": f"{prefix}_browser_page",
             "device": device,
@@ -353,7 +353,7 @@ def _publish_ha_discovery(prefix):
     try:
         camurl_topic = f"{prefix}/state/camera/stream_url"
         payload = {
-            "name": f"{prefix} Camera URL",
+            "name": f"Camera URL",
             "state_topic": camurl_topic,
             "unique_id": f"{prefix}_camera_url",
             "device": device,
@@ -365,7 +365,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/browser/refresh"
         payload = {
-            "name": f"{prefix} Browser Refresh",
+            "name": f"Browser Refresh",
             "command_topic": topic,
             "unique_id": f"{prefix}_browser_refresh",
             "device": device,
@@ -377,7 +377,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/browser/pause"
         payload = {
-            "name": f"{prefix} Browser Pause",
+            "name": f"Browser Pause",
             "command_topic": topic,
             "unique_id": f"{prefix}_browser_pause",
             "device": device,
@@ -389,7 +389,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/browser/resume"
         payload = {
-            "name": f"{prefix} Browser Resume",
+            "name": f"Browser Resume",
             "command_topic": topic,
             "unique_id": f"{prefix}_browser_resume",
             "device": device,
@@ -401,7 +401,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/browser/url_set"
         payload = {
-            "name": f"{prefix} Browser Set URL",
+            "name": f"Browser Set URL",
             "command_topic": topic,
             "payload_press": "",
             "unique_id": f"{prefix}_browser_set_url",
@@ -414,7 +414,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/camera/refresh"
         payload = {
-            "name": f"{prefix} Camera Refresh",
+            "name": f"Camera Refresh",
             "command_topic": topic,
             "unique_id": f"{prefix}_camera_refresh",
             "device": device,
@@ -426,7 +426,7 @@ def _publish_ha_discovery(prefix):
     try:
         topic = f"{prefix}/command/settings/update"
         payload = {
-            "name": f"{prefix} Settings Update",
+            "name": f"Settings Update",
             "command_topic": topic,
             "payload_press": "{}",
             "unique_id": f"{prefix}_settings_update",
