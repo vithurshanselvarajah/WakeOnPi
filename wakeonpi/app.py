@@ -1,21 +1,28 @@
 import cv2
 import socket
 from flask import Flask, Response, stream_with_context, request, redirect, url_for
+import logging
 
 from . import state
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed
 from .auth import requires_auth
-from . import motion, mqtt, config
+from . import motion, mqtt, config, browser
 
 app = Flask(__name__)
 
-motion.start_motion_thread()
 mqtt.start()
+try:
+    logging.getLogger("App").info("Starting browser service by default")
+    browser.start()
+except Exception:
+    logging.getLogger("App").exception("Failed to start browser service")
+
+motion.start_motion_thread()
+
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # doesn't actually send traffic
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
     except Exception:

@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import time
+import logging
 try:
     import paho.mqtt.client as mqtt
 except Exception:
@@ -10,11 +11,29 @@ except Exception:
 from . import config, state
 from .display import set_display
 
+log = logging.getLogger("MQTT")
+
 _client = None
 
 def _on_connect(client, userdata, flags, rc):
+    log.info(f"MQTT connected with rc={rc}")
     prefix = config.MQTT_TOPIC_PREFIX
     client.subscribe(f"{prefix}/screen/set")
+    client.subscribe(f"{prefix}/browser/url/set")
+    client.subscribe(f"{prefix}/browser/refresh")
+    client.subscribe(f"{prefix}/browser/pause")
+    client.subscribe(f"{prefix}/browser/resume")
+
+    try:
+        import wakeonpi.browser as browser
+        cur = getattr(browser, "get_current_url", lambda: None)()
+        if not cur:
+            cur = getattr(state, "stream_url", None)
+        if cur:
+            publish_stream_url(cur)
+    except Exception:
+        log.exception("Failed to publish current stream URL on MQTT connect")
+
 
 def _on_message(client, userdata, msg):
     try:
@@ -25,13 +44,38 @@ def _on_message(client, userdata, msg):
             set_display(val)
             state.display_on = val
             publish_display(val)
+        elif msg.topic.endswith("/browser/url/set"):
+            try:
+                import wakeonpi.browser as browser
+                browser.show_url(payload, force=True, one_shot=True)
+                publish_stream_url(payload)
+            except Exception:
+                log.exception("MQTT handler failed to set browser URL")
+        elif msg.topic.endswith("/browser/refresh"):
+            try:
+                import wakeonpi.browser as browser
+                browser.refresh()
+            except Exception:
+                log.exception("MQTT handler failed to refresh browser")
+        elif msg.topic.endswith("/browser/pause"):
+            try:
+                import wakeonpi.browser as browser
+                browser.pause()
+            except Exception:
+                log.exception("MQTT handler failed to pause browser")
+        elif msg.topic.endswith("/browser/resume"):
+            try:
+                import wakeonpi.browser as browser
+                browser.resume()
+            except Exception:
+                log.exception("MQTT handler failed to resume browser")
     except Exception:
-        pass
+        log.exception("Unexpected error in MQTT on_message handler")
 
 def start():
     global _client
     if mqtt is None:
-        print("paho-mqtt not installed; MQTT disabled")
+        log.warning("paho-mqtt not installed; MQTT disabled")
         return
     if _client is not None:
         return
@@ -42,20 +86,33 @@ def start():
     _client.on_connect = _on_connect
     _client.on_message = _on_message
     try:
-        _client.connect(cfg.get("MQTT_HOST") or "localhost", int(cfg.get("MQTT_PORT") or 1883))
+        host = cfg.get("MQTT_HOST") or "localhost"
+        port = int(cfg.get("MQTT_PORT") or 1883)
+        log.info(f"Connecting to MQTT {host}:{port}")
+        _client.connect(host, port)
         t = threading.Thread(target=_client.loop_forever, daemon=True)
         t.start()
-    except Exception as e:
-        print("MQTT connect error:", e)
-        _client = None
+
+        try:
+            import wakeonpi.browser as browser
+            cur = getattr(browser, "get_current_url", lambda: None)()
+            if cur:
+                publish_stream_url(cur)
+        except Exception:
+            log.exception("Failed to publish current browser URL on MQTT start")
+
+    except Exception:
+        log.exception("MQTT connect error")
+
 
 def publish(topic_suffix, payload):
     if _client is None:
         return
     try:
-        _client.publish(f"{config.MQTT_TOPIC_PREFIX}/{topic_suffix}", payload, retain=True)
+        full = f"{config.MQTT_TOPIC_PREFIX}/{topic_suffix}"
+        _client.publish(full, payload, retain=True)
     except Exception:
-        pass
+        log.exception(f"Failed to publish MQTT message: {topic_suffix} -> {payload}")
 
 def publish_motion(is_motion):
     publish("motion", "ON" if is_motion else "OFF")
