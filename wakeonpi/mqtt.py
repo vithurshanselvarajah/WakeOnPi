@@ -17,6 +17,9 @@ log = logging.getLogger("MQTT")
 _client = None
 _connected = False
 
+_last_uptime = None
+_last_version = None
+
 
 def _on_connect(client, userdata, flags, rc):
     global _connected
@@ -59,6 +62,12 @@ def _on_connect(client, userdata, flags, rc):
             version = getattr(config, 'VERSION', '0.0.1')
         publish_state('system/uptime', str(uptime))
         publish_state('system/version', str(version))
+        try:
+            global _last_uptime, _last_version
+            _last_uptime = str(uptime)
+            _last_version = str(version)
+        except Exception:
+            pass
     except Exception:
         log.exception("Failed to publish system info on MQTT connect")
 
@@ -207,6 +216,14 @@ def publish(topic_suffix, payload):
         log.exception(f"Failed to publish MQTT message: {topic_suffix} -> {payload}")
 
 def publish_state(path, payload):
+    try:
+        global _last_uptime, _last_version
+        if path == 'system/uptime':
+            _last_uptime = payload
+        elif path == 'system/version':
+            _last_version = payload
+    except Exception:
+        pass
     publish(f"state/{path}", payload)
 
 def publish_motion(is_motion):
@@ -223,3 +240,11 @@ def publish_browser_current_page(url):
     
 def publish_command(path, payload):
     publish(f"command/{path}", payload)
+
+
+def get_system_uptime():
+    return _last_uptime
+
+
+def get_system_version():
+    return _last_version

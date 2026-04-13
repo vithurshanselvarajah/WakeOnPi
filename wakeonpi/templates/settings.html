@@ -74,8 +74,18 @@
         <dt>MQTT Connected</dt><dd>{{ 'Yes' if status.get('mqtt_connected') else 'No' }} <button onclick="fetch('/settings/mqtt/reconnect', {method:'POST'}).then(()=>location.reload())">Reconnect</button></dd>
         <dt>MQTT Host</dt><dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
         <dt>MQTT Topic Prefix</dt><dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
-        <dt>Browser Running</dt><dd>{{ 'Yes' if status.get('browser_running') else 'No' }} <button onclick="fetch('/settings/browser/refresh', {method:'POST'}).then(()=>location.reload())">Refresh</button></dd>
-        <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }} <button onclick="fetch('/settings/browser/toggle', {method:'POST'}).then(()=>location.reload())">{{ 'Resume' if status.get('browser_paused') else 'Pause' }}</button></dd>
+        <dt>Browser Running</dt>
+        <dd>
+          {{ 'Yes' if status.get('browser_running') else 'No' }}
+          {% if not status.get('browser_paused') %}
+            <button onclick="fetch('/settings/browser/refresh', {method:'POST'}).then(()=>location.reload())">Refresh</button>
+          {% endif %}
+        </dd>
+        <dt>Browser Paused</dt>
+        <dd>
+          {{ 'Yes' if status.get('browser_paused') else 'No' }}
+          <button onclick="fetch('/settings/browser/toggle', {method:'POST'}).then(()=>location.reload())">{{ 'Resume' if status.get('browser_paused') else 'Pause' }}</button>
+        </dd>
         <dt>Browser Current URL</dt><dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
         <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
         <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>

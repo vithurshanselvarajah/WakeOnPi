@@ -105,7 +105,7 @@ def settings():
         status['mqtt_connected'] = getattr(mqtt, "is_connected", lambda: False)()
         status['mqtt_host'] = s.get('MQTT_HOST')
         status['mqtt_port'] = s.get('MQTT_PORT')
-        status['mqtt_topic_prefix'] = s.get('MQTT_TOPIC_PREFIX')
+        status['mqtt_topic_prefix'] = config.MQTT_TOPIC_PREFIX
     except Exception:
         logging.getLogger("App").exception("Failed to read MQTT status")
 
@@ -124,6 +124,14 @@ def settings():
     status['display_on'] = state.display_on
     status['clients_connected'] = state.clients_connected
     status['stream_url'] = getattr(state, "stream_url", None)
+    try:
+        uptime = mqtt.get_system_uptime()
+        version = mqtt.get_system_version()
+        status['uptime'] = uptime or 'N/A'
+        status['version'] = version or 'N/A'
+    except Exception:
+        status['uptime'] = 'N/A'
+        status['version'] = 'N/A'
 
     return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
@@ -172,7 +180,6 @@ def settings_browser_toggle():
 @requires_auth
 def settings_restart():
     try:
-        # restart core services
         mqtt.restart()
         try:
             import wakeonpi.browser as browser
