@@ -55,6 +55,12 @@
         <label>MQTT_PASSWORD <small>(sensitive — leave unchanged to keep current)</small></label>
         <input name="MQTT_PASSWORD" type="password" value="{{ pwd_display }}" autocomplete="new-password"/>
 
+        <label>HTTP_USERNAME</label>
+        <input name="HTTP_USERNAME" type="text" value="{{ s.get('HTTP_USERNAME') or '' }}"/>
+
+        <label>HTTP_PASSWORD <small>(sensitive — leave unchanged to keep current)</small></label>
+        <input name="HTTP_PASSWORD" type="password" value="{{ http_pwd_display }}" autocomplete="new-password"/>
+
         <label>HASS_DASHBOARD_URL</label>
         <input name="HASS_DASHBOARD_URL" type="text" value="{{ s.get('HASS_DASHBOARD_URL') or '' }}"/>
 
@@ -62,21 +68,23 @@
       </form>
       <p style="margin-top:12px"><small>Sensitive values like passwords are not exposed. To keep an existing password, leave the password field unchanged.</small></p>
 
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #eee">
-        <h3>Status</h3>
-        <dl>
-          <dt>MQTT Connected</dt><dd>{{ 'Yes' if status.get('mqtt_connected') else 'No' }}</dd>
-          <dt>MQTT Host</dt><dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
-          <dt>MQTT Topic Prefix</dt><dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
-          <dt>Browser Running</dt><dd>{{ 'Yes' if status.get('browser_running') else 'No' }}</dd>
-          <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }}</dd>
-          <dt>Browser Current URL</dt><dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
-          <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
-          <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
-          <dt>Stream URL</dt><dd>{{ status.get('stream_url') or 'N/A' }}</dd>
-          <dt>Clients Connected</dt><dd>{{ status.get('clients_connected') or 0 }}</dd>
-        </dl>
-      </div>
+    <div style="margin-top:18px;padding-top:12px;border-top:1px solid #eee">
+      <h3>Status</h3>
+      <dl>
+        <dt>MQTT Connected</dt><dd>{{ 'Yes' if status.get('mqtt_connected') else 'No' }} <button onclick="fetch('/settings/mqtt/reconnect', {method:'POST'}).then(()=>location.reload())">Reconnect</button></dd>
+        <dt>MQTT Host</dt><dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
+        <dt>MQTT Topic Prefix</dt><dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
+        <dt>Browser Running</dt><dd>{{ 'Yes' if status.get('browser_running') else 'No' }} <button onclick="fetch('/settings/browser/refresh', {method:'POST'}).then(()=>location.reload())">Refresh</button></dd>
+        <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }} <button onclick="fetch('/settings/browser/resume', {method:'POST'}).then(()=>location.reload())">Resume</button></dd>
+        <dt>Browser Current URL</dt><dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
+        <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
+        <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
+        <dt>Stream URL</dt><dd>{{ status.get('stream_url') or 'N/A' }}</dd>
+        <dt>Clients Connected</dt><dd>{{ status.get('clients_connected') or 0 }}</dd>
+        <dt>System Uptime (s)</dt><dd>{{ status.get('uptime') or 'N/A' }}</dd>
+        <dt>Version</dt><dd>{{ status.get('version') or 'N/A' }}</dd>
+      </dl>
+    </div>
     </div>
   </body>
 </html>

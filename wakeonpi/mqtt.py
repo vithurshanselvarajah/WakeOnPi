@@ -10,6 +10,7 @@ except Exception:
 
 from . import config, state
 from .display import set_display
+from pathlib import Path
 
 log = logging.getLogger("MQTT")
 
@@ -35,6 +36,26 @@ def _on_connect(client, userdata, flags, rc):
             publish_browser_current_page(bro)
     except Exception:
         log.exception("Failed to publish current stream URLs on MQTT connect")
+
+    try:
+        uptime = int(time.time() - getattr(state, "start_time", time.time()))
+        try:
+            pjpath = Path(__file__).parent.parent / 'pyproject.toml'
+            version = None
+            if pjpath.exists():
+                with pjpath.open('r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('version') and '=' in line:
+                            _, val = line.split('=', 1)
+                            version = val.strip().strip('"').strip("'")
+                            break
+        except Exception:
+            version = getattr(config, 'VERSION', '0.0.1')
+        publish_state('system/uptime', str(uptime))
+        publish_state('system/version', str(version))
+    except Exception:
+        log.exception("Failed to publish system info on MQTT connect")
 
 
 def _on_message(client, userdata, msg):

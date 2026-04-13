@@ -1,8 +1,10 @@
 import os
 from flask import request, Response
 
-USERNAME = os.environ.get("MOTION_USERNAME")
-PASSWORD = os.environ.get("MOTION_PASSWORD")
+from . import config
+
+USERNAME = getattr(config, "HTTP_USERNAME")
+PASSWORD = getattr(config, "HTTP_PASSWORD")
 
 
 def check_auth(username, password):

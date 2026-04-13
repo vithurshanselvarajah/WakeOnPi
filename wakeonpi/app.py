@@ -2,6 +2,7 @@ import cv2
 import socket
 from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template
 import logging
+import time
 
 from . import state
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed
@@ -53,6 +54,8 @@ def settings():
             "MQTT_TOPIC_PREFIX",
             "MQTT_USERNAME",
             "MQTT_PASSWORD",
+            "HTTP_USERNAME",
+            "HTTP_PASSWORD",
             "HASS_DASHBOARD_URL",
         ]
 
@@ -73,6 +76,10 @@ def settings():
                     if val == sensitive_placeholder:
                         continue
                     updates[key] = val or None
+                elif key == "HTTP_PASSWORD":
+                    if val == sensitive_placeholder:
+                        continue
+                    updates[key] = val or None
                 else:
                     updates[key] = val
 
@@ -82,9 +89,8 @@ def settings():
         return redirect(url_for("settings"))
 
     s = config.current_settings()
-
     pwd_display = sensitive_placeholder if s.get("MQTT_PASSWORD") else ""
-
+    http_pwd_display = sensitive_placeholder if s.get("HTTP_PASSWORD") else ""
 
     status = {}
     try:
@@ -104,12 +110,33 @@ def settings():
     except Exception:
         logging.getLogger("App").exception("Failed to read browser status")
 
+    try:
+        status['uptime'] = int(time.time() - getattr(state, 'start_time', time.time()))
+        # read version from pyproject
+        try:
+            from pathlib import Path
+            pjpath = Path(__file__).parent.parent / 'pyproject.toml'
+            ver = None
+            if pjpath.exists():
+                with pjpath.open('r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('version') and '=' in line:
+                            _, val = line.split('=', 1)
+                            ver = val.strip().strip('"').strip("'")
+                            break
+            status['version'] = ver or '0.0.1'
+        except Exception:
+            status['version'] = '0.0.1'
+    except Exception:
+        logging.getLogger("App").exception("Failed to read system uptime/version")
+
     status['motion_event'] = state.motion_event
     status['display_on'] = state.display_on
     status['clients_connected'] = state.clients_connected
     status['stream_url'] = getattr(state, "stream_url", None)
 
-    return render_template('settings.html', s=s, pwd_display=pwd_display, status=status)
+    return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
 
 @app.route("/")
@@ -149,3 +176,38 @@ def video_feed():
 @app.route("/motion_alerts")
 def motion_alerts():
     return ("motion" if state.motion_event else "nomotion"), 200
+
+
+@app.route('/settings/mqtt/reconnect', methods=['POST'])
+@requires_auth
+def settings_mqtt_reconnect():
+    try:
+        mqtt.start()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to reconnect MQTT")
+        return ('Error', 500)
+
+
+@app.route('/settings/browser/refresh', methods=['POST'])
+@requires_auth
+def settings_browser_refresh():
+    try:
+        import wakeonpi.browser as browser
+        browser.refresh()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to refresh browser")
+        return ('Error', 500)
+
+
+@app.route('/settings/browser/resume', methods=['POST'])
+@requires_auth
+def settings_browser_resume():
+    try:
+        import wakeonpi.browser as browser
+        browser.resume()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to resume browser")
+        return ('Error', 500)
