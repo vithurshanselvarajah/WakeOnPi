@@ -1,4 +1,5 @@
 import threading
+import time
 
 motion_event = False
 last_motion_time = 0
@@ -14,3 +15,5 @@ main_stream_lock = threading.Lock()
 
 display_on = True
 ignore_motion_until = 0
+
+start_time = time.time()
