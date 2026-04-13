@@ -71,6 +71,14 @@ def _on_connect(client, userdata, flags, rc):
     except Exception:
         log.exception("Failed to publish system info on MQTT connect")
 
+    try:
+        try:
+            _publish_ha_discovery(prefix)
+        except Exception:
+            log.exception("Failed to publish Home Assistant discovery messages")
+    except Exception:
+        pass
+
 
 def _on_disconnect(client, userdata, rc):
     global _connected
@@ -248,3 +256,59 @@ def get_system_uptime():
 
 def get_system_version():
     return _last_version
+
+
+def _publish_ha_discovery(prefix):
+    """Publish Home Assistant MQTT discovery payloads for camera, motion binary_sensor and screen switch."""
+    if _client is None:
+        return
+
+    device = {
+        "identifiers": [prefix],
+        "name": "WakeOnPi",
+        "manufacturer": "WakeOnPi",
+        "model": "WakeOnPi",
+    }
+
+    try:
+        motion_topic = f"{prefix}/state/motion"
+        payload = {
+            "name": f"{prefix} Motion",
+            "state_topic": motion_topic,
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "unique_id": f"{prefix}_motion",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/binary_sensor/{prefix}_motion/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA motion discovery")
+
+    try:
+        cmd_topic = f"{prefix}/command/screen/set"
+        state_topic = f"{prefix}/state/screen"
+        payload = {
+            "name": f"{prefix} Screen",
+            "command_topic": cmd_topic,
+            "state_topic": state_topic,
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "unique_id": f"{prefix}_screen",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/switch/{prefix}_screen/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA screen switch discovery")
+
+    try:
+        stream = getattr(state, 'stream_url', None)
+        if stream:
+            payload = {
+                "name": f"{prefix} Stream",
+                "mjpeg_url": stream,
+                "unique_id": f"{prefix}_camera",
+                "device": device,
+            }
+            _client.publish(f"homeassistant/camera/{prefix}_camera/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA camera discovery")
