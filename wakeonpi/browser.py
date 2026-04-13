@@ -164,9 +164,8 @@ class _BrowserController:
             "--kiosk",
             "--no-first-run",
             "--disable-infobars",
-            "--start-fullscreen",
-            "--window-size=1280,720",
             "--remote-debugging-port=9222",
+            "--remote-debugging-address=127.0.0.1",
             url,
         ]
 
