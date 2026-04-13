@@ -1,6 +1,6 @@
 import cv2
 import socket
-from flask import Flask, Response, stream_with_context, request, redirect, url_for
+from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template
 import logging
 
 from . import state
@@ -34,48 +34,83 @@ def get_local_ip():
 host = get_local_ip()
 port = 5000
 state.stream_url = f"http://{host}:{port}"
-mqtt.publish_stream_url(state.stream_url)
+mqtt.publish_camera_stream_url(state.stream_url)
 
 @app.route("/settings", methods=["GET", "POST"])
 @requires_auth
 def settings():
+    sensitive_placeholder = "__**password_not_changed**__"
+
     if request.method == "POST":
         updates = {}
-        for key in ("MOTION_THRESHOLD", "INACTIVITY_TIMEOUT", "CHECK_INTERVAL", "MQTT_HOST", "MQTT_PORT", "MQTT_TOPIC_PREFIX"):
+        s = config.current_settings()
+        keys = [
+            "MOTION_THRESHOLD",
+            "INACTIVITY_TIMEOUT",
+            "CHECK_INTERVAL",
+            "MQTT_HOST",
+            "MQTT_PORT",
+            "MQTT_TOPIC_PREFIX",
+            "MQTT_USERNAME",
+            "MQTT_PASSWORD",
+            "HASS_DASHBOARD_URL",
+        ]
+
+        for key in keys:
             if key in request.form:
-                val = request.form[key]
-                if key in ("MOTION_THRESHOLD",):
-                    val = int(val)
+                val = request.form.get(key)
+                if key == "MOTION_THRESHOLD":
+                    try:
+                        updates[key] = int(val)
+                    except Exception:
+                        continue
                 elif key in ("INACTIVITY_TIMEOUT", "CHECK_INTERVAL"):
-                    val = float(val)
-                updates[key] = val
-        config.update_settings(**updates)
-        mqtt.start()
+                    try:
+                        updates[key] = float(val)
+                    except Exception:
+                        continue
+                elif key == "MQTT_PASSWORD":
+                    if val == sensitive_placeholder:
+                        continue
+                    updates[key] = val or None
+                else:
+                    updates[key] = val
+
+        if updates:
+            config.update_settings(**updates)
+            mqtt.start()
         return redirect(url_for("settings"))
 
     s = config.current_settings()
-    return (
-        f"<h1>WakeOnPi Settings</h1>"
-        f"<form method='post'>"
-        f"MOTION_THRESHOLD: <input name='MOTION_THRESHOLD' value='{s['MOTION_THRESHOLD']}'/><br/>"
-        f"INACTIVITY_TIMEOUT: <input name='INACTIVITY_TIMEOUT' value='{s['INACTIVITY_TIMEOUT']}'/><br/>"
-        f"CHECK_INTERVAL: <input name='CHECK_INTERVAL' value='{s['CHECK_INTERVAL']}'/><br/>"
-        f"MQTT_HOST: <input name='MQTT_HOST' value='{s['MQTT_HOST'] or ''}'/><br/>"
-        f"MQTT_PORT: <input name='MQTT_PORT' value='{s['MQTT_PORT']}'/><br/>"
-        f"MQTT_TOPIC_PREFIX: <input name='MQTT_TOPIC_PREFIX' value='{s['MQTT_TOPIC_PREFIX']}'/><br/>"
-        f"<button type='submit'>Save</button>"
-        f"</form>"
-    )
 
-@app.route("/display", methods=["POST"])
-@requires_auth
-def api_display():
-    val = request.form.get("on", "").lower() in ("1", "true", "on")
-    set_display = __import__("wakeonpi.display", fromlist=["set_display"]).set_display
-    set_display(val)
-    state.display_on = val
-    mqtt.publish_display(val)
-    return ("OK", 200)
+    pwd_display = sensitive_placeholder if s.get("MQTT_PASSWORD") else ""
+
+
+    status = {}
+    try:
+        status['mqtt_connected'] = getattr(mqtt, "_client", None) is not None
+        status['mqtt_host'] = s.get('MQTT_HOST')
+        status['mqtt_port'] = s.get('MQTT_PORT')
+        status['mqtt_topic_prefix'] = s.get('MQTT_TOPIC_PREFIX')
+    except Exception:
+        logging.getLogger("App").exception("Failed to read MQTT status")
+
+    try:
+        ctrl = getattr(browser, "_get_controller")()
+        proc = getattr(ctrl, "_proc", None)
+        status['browser_running'] = proc is not None and proc.poll() is None
+        status['browser_paused'] = getattr(ctrl, "_paused", False)
+        status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)()
+    except Exception:
+        logging.getLogger("App").exception("Failed to read browser status")
+
+    status['motion_event'] = state.motion_event
+    status['display_on'] = state.display_on
+    status['clients_connected'] = state.clients_connected
+    status['stream_url'] = getattr(state, "stream_url", None)
+
+    return render_template('settings.html', s=s, pwd_display=pwd_display, status=status)
+
 
 @app.route("/")
 @requires_auth

@@ -18,57 +18,68 @@ _client = None
 def _on_connect(client, userdata, flags, rc):
     log.info(f"MQTT connected with rc={rc}")
     prefix = config.MQTT_TOPIC_PREFIX
-    client.subscribe(f"{prefix}/screen/set")
-    client.subscribe(f"{prefix}/browser/url/set")
-    client.subscribe(f"{prefix}/browser/refresh")
-    client.subscribe(f"{prefix}/browser/pause")
-    client.subscribe(f"{prefix}/browser/resume")
+    client.subscribe(f"{prefix}/command/screen/set")
+    client.subscribe(f"{prefix}/command/browser/url_set")
+    client.subscribe(f"{prefix}/command/browser/refresh")
+    client.subscribe(f"{prefix}/command/browser/pause")
+    client.subscribe(f"{prefix}/command/browser/resume")
+    client.subscribe(f"{prefix}/command/camera/refresh")
 
     try:
+        cam = getattr(state, "stream_url", None)
+        if cam:
+            publish_camera_stream_url(cam)
         import wakeonpi.browser as browser
-        cur = getattr(browser, "get_current_url", lambda: None)()
-        if not cur:
-            cur = getattr(state, "stream_url", None)
-        if cur:
-            publish_stream_url(cur)
+        bro = getattr(browser, "get_current_url", lambda: None)()
+        if bro:
+            publish_browser_current_page(bro)
     except Exception:
-        log.exception("Failed to publish current stream URL on MQTT connect")
+        log.exception("Failed to publish current stream URLs on MQTT connect")
 
 
 def _on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode()
-        if msg.topic.endswith("/screen/set"):
+        log.debug(f"MQTT message received: topic={msg.topic} payload={payload}")
+        prefix = config.MQTT_TOPIC_PREFIX
+        if msg.topic == f"{prefix}/command/screen/set":
             val = payload.lower() in ("1", "true", "on", "open")
             state.manual_display_override = True
             set_display(val)
             state.display_on = val
             publish_display(val)
-        elif msg.topic.endswith("/browser/url/set"):
+        elif msg.topic == f"{prefix}/command/browser/url_set":
             try:
                 import wakeonpi.browser as browser
                 browser.show_url(payload, force=True, one_shot=True)
-                publish_stream_url(payload)
+                publish_browser_current_page(payload)
             except Exception:
                 log.exception("MQTT handler failed to set browser URL")
-        elif msg.topic.endswith("/browser/refresh"):
+        elif msg.topic == f"{prefix}/command/browser/refresh":
             try:
                 import wakeonpi.browser as browser
                 browser.refresh()
             except Exception:
                 log.exception("MQTT handler failed to refresh browser")
-        elif msg.topic.endswith("/browser/pause"):
+        elif msg.topic == f"{prefix}/command/browser/pause":
             try:
                 import wakeonpi.browser as browser
                 browser.pause()
             except Exception:
                 log.exception("MQTT handler failed to pause browser")
-        elif msg.topic.endswith("/browser/resume"):
+        elif msg.topic == f"{prefix}/command/browser/resume":
             try:
                 import wakeonpi.browser as browser
                 browser.resume()
             except Exception:
                 log.exception("MQTT handler failed to resume browser")
+        elif msg.topic == f"{prefix}/command/camera/refresh":
+            try:
+                cam = getattr(state, "stream_url", None)
+                if cam:
+                    publish_camera_stream_url(cam)
+            except Exception:
+                log.exception("MQTT handler failed to refresh camera stream URL")
     except Exception:
         log.exception("Unexpected error in MQTT on_message handler")
 
@@ -97,7 +108,7 @@ def start():
             import wakeonpi.browser as browser
             cur = getattr(browser, "get_current_url", lambda: None)()
             if cur:
-                publish_stream_url(cur)
+                publish_browser_current_page(cur)
         except Exception:
             log.exception("Failed to publish current browser URL on MQTT start")
 
@@ -114,11 +125,20 @@ def publish(topic_suffix, payload):
     except Exception:
         log.exception(f"Failed to publish MQTT message: {topic_suffix} -> {payload}")
 
+def publish_state(path, payload):
+    publish(f"state/{path}", payload)
+
 def publish_motion(is_motion):
-    publish("motion", "ON" if is_motion else "OFF")
+    publish_state("motion", "ON" if is_motion else "OFF")
 
 def publish_display(is_on):
-    publish("screen", "ON" if is_on else "OFF")
+    publish_state("screen", "ON" if is_on else "OFF")
 
-def publish_stream_url(url):
-    publish("stream_url", url)
+def publish_camera_stream_url(url):
+    publish_state("camera/stream_url", url)
+
+def publish_browser_current_page(url):
+    publish_state("browser/current_page", url)
+
+def publish_command(path, payload):
+    publish(f"command/{path}", payload)
