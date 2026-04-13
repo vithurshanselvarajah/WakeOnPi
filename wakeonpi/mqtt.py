@@ -312,3 +312,126 @@ def _publish_ha_discovery(prefix):
             _client.publish(f"homeassistant/camera/{prefix}_camera/config", json.dumps(payload), retain=True)
     except Exception:
         log.exception("Failed to publish HA camera discovery")
+
+    try:
+        uptime_topic = f"{prefix}/state/system/uptime"
+        payload = {
+            "name": f"{prefix} Uptime",
+            "state_topic": uptime_topic,
+            "unit_of_measurement": "s",
+            "unique_id": f"{prefix}_uptime",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/sensor/{prefix}_uptime/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA uptime sensor discovery")
+
+    try:
+        version_topic = f"{prefix}/state/system/version"
+        payload = {
+            "name": f"{prefix} Version",
+            "state_topic": version_topic,
+            "unique_id": f"{prefix}_version",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/sensor/{prefix}_version/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA version sensor discovery")
+
+    try:
+        browser_topic = f"{prefix}/state/browser/current_page"
+        payload = {
+            "name": f"{prefix} Browser Page",
+            "state_topic": browser_topic,
+            "unique_id": f"{prefix}_browser_page",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/sensor/{prefix}_browser_page/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser page sensor discovery")
+
+    try:
+        camurl_topic = f"{prefix}/state/camera/stream_url"
+        payload = {
+            "name": f"{prefix} Camera URL",
+            "state_topic": camurl_topic,
+            "unique_id": f"{prefix}_camera_url",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/sensor/{prefix}_camera_url/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA camera URL sensor discovery")
+
+    try:
+        topic = f"{prefix}/command/browser/refresh"
+        payload = {
+            "name": f"{prefix} Browser Refresh",
+            "command_topic": topic,
+            "unique_id": f"{prefix}_browser_refresh",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser refresh command discovery")
+
+    try:
+        topic = f"{prefix}/command/browser/pause"
+        payload = {
+            "name": f"{prefix} Browser Pause",
+            "command_topic": topic,
+            "unique_id": f"{prefix}_browser_pause",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_browser_pause/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser pause command discovery")
+
+    try:
+        topic = f"{prefix}/command/browser/resume"
+        payload = {
+            "name": f"{prefix} Browser Resume",
+            "command_topic": topic,
+            "unique_id": f"{prefix}_browser_resume",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_browser_resume/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser resume command discovery")
+
+    try:
+        topic = f"{prefix}/command/browser/url_set"
+        payload = {
+            "name": f"{prefix} Browser Set URL",
+            "command_topic": topic,
+            "payload_press": "",
+            "unique_id": f"{prefix}_browser_set_url",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_browser_set_url/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser set url command discovery")
+
+    try:
+        topic = f"{prefix}/command/camera/refresh"
+        payload = {
+            "name": f"{prefix} Camera Refresh",
+            "command_topic": topic,
+            "unique_id": f"{prefix}_camera_refresh",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_camera_refresh/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA camera refresh command discovery")
+
+    try:
+        topic = f"{prefix}/command/settings/update"
+        payload = {
+            "name": f"{prefix} Settings Update",
+            "command_topic": topic,
+            "payload_press": "{}",
+            "unique_id": f"{prefix}_settings_update",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_settings_update/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA settings update command discovery")
