@@ -1,0 +1,4 @@
+opencv-python==4.13.0.92;
+flask==3.1.3;
+picamera2==0.3.34;
+paho-mqtt==2.1.0;
