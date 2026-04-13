@@ -30,7 +30,7 @@ jobs:
             VERSION=$(echo "$VERSION_LINE" | sed -E 's/.*= *"([^"\r\n]+)".*/\1/')
           else
             VERSION=$(python - <<'PY'
-import tomllib,sys
+import tomllib, sys
 try:
     d=tomllib.load(open('pyproject.toml','rb'))
     v=d.get('tool',{}).get('poetry',{}).get('version') or d.get('project',{}).get('version')
