@@ -75,11 +75,12 @@
         <dt>MQTT Host</dt><dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
         <dt>MQTT Topic Prefix</dt><dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
         <dt>Browser Running</dt><dd>{{ 'Yes' if status.get('browser_running') else 'No' }} <button onclick="fetch('/settings/browser/refresh', {method:'POST'}).then(()=>location.reload())">Refresh</button></dd>
-        <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }} <button onclick="fetch('/settings/browser/resume', {method:'POST'}).then(()=>location.reload())">Resume</button></dd>
+        <dt>Browser Paused</dt><dd>{{ 'Yes' if status.get('browser_paused') else 'No' }} <button onclick="fetch('/settings/browser/toggle', {method:'POST'}).then(()=>location.reload())">{{ 'Resume' if status.get('browser_paused') else 'Pause' }}</button></dd>
         <dt>Browser Current URL</dt><dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
         <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
         <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
         <dt>Stream URL</dt><dd>{{ status.get('stream_url') or 'N/A' }}</dd>
+        <dt>Services</dt><dd><button onclick="fetch('/settings/restart', {method:'POST'}).then(()=>location.reload())">Restart Services</button></dd>
         <dt>Clients Connected</dt><dd>{{ status.get('clients_connected') or 0 }}</dd>
         <dt>System Uptime (s)</dt><dd>{{ status.get('uptime') or 'N/A' }}</dd>
         <dt>Version</dt><dd>{{ status.get('version') or 'N/A' }}</dd>

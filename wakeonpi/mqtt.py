@@ -15,8 +15,12 @@ from pathlib import Path
 log = logging.getLogger("MQTT")
 
 _client = None
+_connected = False
+
 
 def _on_connect(client, userdata, flags, rc):
+    global _connected
+    _connected = True
     log.info(f"MQTT connected with rc={rc}")
     prefix = config.MQTT_TOPIC_PREFIX
     client.subscribe(f"{prefix}/command/screen/set")
@@ -25,6 +29,7 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/pause")
     client.subscribe(f"{prefix}/command/browser/resume")
     client.subscribe(f"{prefix}/command/camera/refresh")
+    client.subscribe(f"{prefix}/command/settings/update")
 
     try:
         cam = getattr(state, "stream_url", None)
@@ -56,6 +61,12 @@ def _on_connect(client, userdata, flags, rc):
         publish_state('system/version', str(version))
     except Exception:
         log.exception("Failed to publish system info on MQTT connect")
+
+
+def _on_disconnect(client, userdata, rc):
+    global _connected
+    _connected = False
+    log.info(f"MQTT disconnected rc={rc}")
 
 
 def _on_message(client, userdata, msg):
@@ -101,22 +112,50 @@ def _on_message(client, userdata, msg):
                     publish_camera_stream_url(cam)
             except Exception:
                 log.exception("MQTT handler failed to refresh camera stream URL")
+        elif msg.topic == f"{prefix}/command/settings/update":
+            try:
+                data = json.loads(payload)
+                allowed = set(config.current_settings().keys())
+                updates = {k: v for k, v in data.items() if k in allowed}
+                if updates:
+                    config.update_settings(**updates)
+                    try:
+                        restart()
+                    except Exception:
+                        log.exception("Failed to restart MQTT after settings update via MQTT")
+                    try:
+                        import wakeonpi.browser as browser
+                        browser.stop()
+                        browser.start()
+                    except Exception:
+                        log.exception("Failed to restart browser after settings update via MQTT")
+            except Exception:
+                log.exception("Failed to parse settings update message")
     except Exception:
         log.exception("Unexpected error in MQTT on_message handler")
 
+
 def start():
-    global _client
+    global _client, _connected
     if mqtt is None:
         log.warning("paho-mqtt not installed; MQTT disabled")
+        _connected = False
         return
-    if _client is not None:
+    if _client is not None and _connected:
         return
+    if _client is not None and not _connected:
+        try:
+            stop()
+        except Exception:
+            log.exception("Error stopping existing MQTT client")
+
     cfg = config.current_settings()
     _client = mqtt.Client()
     if cfg.get("MQTT_USERNAME"):
         _client.username_pw_set(cfg.get("MQTT_USERNAME"), cfg.get("MQTT_PASSWORD"))
     _client.on_connect = _on_connect
     _client.on_message = _on_message
+    _client.on_disconnect = _on_disconnect
     try:
         host = cfg.get("MQTT_HOST") or "localhost"
         port = int(cfg.get("MQTT_PORT") or 1883)
@@ -125,16 +164,37 @@ def start():
         t = threading.Thread(target=_client.loop_forever, daemon=True)
         t.start()
 
-        try:
-            import wakeonpi.browser as browser
-            cur = getattr(browser, "get_current_url", lambda: None)()
-            if cur:
-                publish_browser_current_page(cur)
-        except Exception:
-            log.exception("Failed to publish current browser URL on MQTT start")
-
     except Exception:
         log.exception("MQTT connect error")
+        try:
+            _client = None
+        except Exception:
+            pass
+        _connected = False
+
+
+def stop():
+    global _client, _connected
+    if _client is None:
+        _connected = False
+        return
+    try:
+        try:
+            _client.disconnect()
+        except Exception:
+            pass
+        _client = None
+    finally:
+        _connected = False
+
+
+def restart():
+    stop()
+    start()
+
+
+def is_connected():
+    return _client is not None and _connected
 
 
 def publish(topic_suffix, payload):
@@ -160,6 +220,6 @@ def publish_camera_stream_url(url):
 
 def publish_browser_current_page(url):
     publish_state("browser/current_page", url)
-
+    
 def publish_command(path, payload):
     publish(f"command/{path}", payload)

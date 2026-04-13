@@ -13,8 +13,8 @@ DEFAULTS = {
     "MQTT_USERNAME": None,
     "MQTT_PASSWORD": None,
     "HASS_DASHBOARD_URL": "https://github.com/vithurshanselvarajah/WakeOnPi",
-    "HTTP_USERNAME": "admin",
-    "HTTP_PASSWORD": "admin123",
+    "HTTP_USERNAME": "wakeonpi",
+    "HTTP_PASSWORD": "password123",
 }
 
 MOTION_THRESHOLD = 1500

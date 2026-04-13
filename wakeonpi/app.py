@@ -85,7 +85,15 @@ def settings():
 
         if updates:
             config.update_settings(**updates)
-            mqtt.start()
+            try:
+                import wakeonpi.motion as motion_mod
+                motion_mod.config = config
+            except Exception:
+                pass
+            try:
+                mqtt.restart()
+            except Exception:
+                logging.getLogger("App").exception("Failed to restart MQTT after settings change")
         return redirect(url_for("settings"))
 
     s = config.current_settings()
@@ -94,7 +102,7 @@ def settings():
 
     status = {}
     try:
-        status['mqtt_connected'] = getattr(mqtt, "_client", None) is not None
+        status['mqtt_connected'] = getattr(mqtt, "is_connected", lambda: False)()
         status['mqtt_host'] = s.get('MQTT_HOST')
         status['mqtt_port'] = s.get('MQTT_PORT')
         status['mqtt_topic_prefix'] = s.get('MQTT_TOPIC_PREFIX')
@@ -104,32 +112,13 @@ def settings():
     try:
         ctrl = getattr(browser, "_get_controller")()
         proc = getattr(ctrl, "_proc", None)
-        status['browser_running'] = proc is not None and proc.poll() is None
-        status['browser_paused'] = getattr(ctrl, "_paused", False)
+        browser_running = proc is not None and proc.poll() is None
+        browser_paused = getattr(ctrl, "_paused", False)
+        status['browser_running'] = browser_running
+        status['browser_paused'] = browser_paused
         status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)()
     except Exception:
         logging.getLogger("App").exception("Failed to read browser status")
-
-    try:
-        status['uptime'] = int(time.time() - getattr(state, 'start_time', time.time()))
-        # read version from pyproject
-        try:
-            from pathlib import Path
-            pjpath = Path(__file__).parent.parent / 'pyproject.toml'
-            ver = None
-            if pjpath.exists():
-                with pjpath.open('r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith('version') and '=' in line:
-                            _, val = line.split('=', 1)
-                            ver = val.strip().strip('"').strip("'")
-                            break
-            status['version'] = ver or '0.0.1'
-        except Exception:
-            status['version'] = '0.0.1'
-    except Exception:
-        logging.getLogger("App").exception("Failed to read system uptime/version")
 
     status['motion_event'] = state.motion_event
     status['display_on'] = state.display_on
@@ -138,6 +127,63 @@ def settings():
 
     return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
+
+@app.route('/settings/mqtt/reconnect', methods=['POST'])
+@requires_auth
+def settings_mqtt_reconnect():
+    try:
+        mqtt.restart()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to reconnect MQTT")
+        return ('Error', 500)
+
+
+@app.route('/settings/browser/refresh', methods=['POST'])
+@requires_auth
+def settings_browser_refresh():
+    try:
+        import wakeonpi.browser as browser
+        browser.refresh()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to refresh browser")
+        return ('Error', 500)
+
+
+@app.route('/settings/browser/toggle', methods=['POST'])
+@requires_auth
+def settings_browser_toggle():
+    try:
+        import wakeonpi.browser as browser
+        ctrl = getattr(browser, "_get_controller")()
+        paused = getattr(ctrl, "_paused", False)
+        if paused:
+            browser.resume()
+        else:
+            browser.pause()
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to toggle browser")
+        return ('Error', 500)
+
+
+@app.route('/settings/restart', methods=['POST'])
+@requires_auth
+def settings_restart():
+    try:
+        # restart core services
+        mqtt.restart()
+        try:
+            import wakeonpi.browser as browser
+            browser.stop()
+            browser.start()
+        except Exception:
+            logging.getLogger("App").exception("Failed to restart browser during full restart")
+        return ('', 204)
+    except Exception:
+        logging.getLogger("App").exception("Failed to restart services")
+        return ('Error', 500)
 
 @app.route("/")
 @requires_auth
@@ -176,38 +222,3 @@ def video_feed():
 @app.route("/motion_alerts")
 def motion_alerts():
     return ("motion" if state.motion_event else "nomotion"), 200
-
-
-@app.route('/settings/mqtt/reconnect', methods=['POST'])
-@requires_auth
-def settings_mqtt_reconnect():
-    try:
-        mqtt.start()
-        return ('', 204)
-    except Exception:
-        logging.getLogger("App").exception("Failed to reconnect MQTT")
-        return ('Error', 500)
-
-
-@app.route('/settings/browser/refresh', methods=['POST'])
-@requires_auth
-def settings_browser_refresh():
-    try:
-        import wakeonpi.browser as browser
-        browser.refresh()
-        return ('', 204)
-    except Exception:
-        logging.getLogger("App").exception("Failed to refresh browser")
-        return ('Error', 500)
-
-
-@app.route('/settings/browser/resume', methods=['POST'])
-@requires_auth
-def settings_browser_resume():
-    try:
-        import wakeonpi.browser as browser
-        browser.resume()
-        return ('', 204)
-    except Exception:
-        logging.getLogger("App").exception("Failed to resume browser")
-        return ('Error', 500)
