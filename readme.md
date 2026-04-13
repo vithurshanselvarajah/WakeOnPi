@@ -156,5 +156,3 @@ By default the MQTT prefix is `wakeonpi`.
 This repository is provided under a non-commercial license: you are free to use, modify and share the project for non-commercial purposes only. For commercial use please contact the author to discuss licensing.
 
 ---
-
-If you want the README adjusted (shorter, more detail in specific areas, or examples for Docker), tell me which parts to expand or remove.
