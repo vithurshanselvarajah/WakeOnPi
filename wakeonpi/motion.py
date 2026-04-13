@@ -33,6 +33,7 @@ def motion_detection_loop():
             if state.manual_display_override:
                 prev_frame = gray
                 time.sleep(60)
+                state.manual_display_override = False
                 continue
 
             if is_motion:
