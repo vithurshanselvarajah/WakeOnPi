@@ -407,7 +407,7 @@ def _publish_ha_discovery(prefix):
             "unique_id": f"{prefix}_browser_set_url",
             "device": device,
         }
-        _client.publish(f"homeassistant/button/{prefix}_browser_set_url/config", json.dumps(payload), retain=True)
+        _client.publish(f"homeassistant/text/{prefix}_browser_set_url/config", json.dumps(payload), retain=True)
     except Exception:
         log.exception("Failed to publish HA browser set url command discovery")
 
