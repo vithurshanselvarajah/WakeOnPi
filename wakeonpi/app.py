@@ -59,6 +59,7 @@ def settings():
             "HTTP_PASSWORD",
             "HASS_DASHBOARD_URL",
             "BACKLIGHT_PATH",
+            "RECORDINGS_ROOT",
         ]
 
         for key in keys:
@@ -96,6 +97,13 @@ def settings():
                 mqtt.restart()
             except Exception:
                 logging.getLogger("App").exception("Failed to restart MQTT after settings change")
+            try:
+                # ensure recordings path exists
+                rr = updates.get('RECORDINGS_ROOT') or config.RECORDINGS_ROOT
+                from pathlib import Path
+                Path(rr).mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
             # if BACKLIGHT_PATH changed, attempt to write and record status
             try:
                 bp = updates.get('BACKLIGHT_PATH')
@@ -139,28 +147,18 @@ def settings():
     status['clients_connected'] = state.clients_connected
     status['stream_url'] = getattr(state, "stream_url", None)
     try:
-        backlight_path = s.get("BACKLIGHT_PATH") or getattr(config, 'BACKLIGHT_PATH', None)
-        status['backlight_path'] = backlight_path
-        status['backlight_writable'] = bool(backlight_path and os.path.exists(backlight_path) and os.access(backlight_path, os.W_OK))
-    except Exception:
-        status['backlight_path'] = None
-        status['backlight_writable'] = False
-    try:
         version = mqtt.get_system_version()
         status['version'] = version or 'N/A'
     except Exception:
         status['version'] = 'N/A'
-    # show last backlight test result if available
-    tb = getattr(state, 'temp_backlight_test', None)
-    if tb:
-        status['last_backlight_test'] = tb
-        # clear transient
-        try:
-            state.temp_backlight_test = None
-        except Exception:
-            pass
-    else:
-        status['last_backlight_test'] = None
+    # recording status
+    try:
+        from . import recorder
+        status['recording_active'] = recorder.is_recording()
+        status['recording_file'] = recorder.get_current_file()
+    except Exception:
+        status['recording_active'] = False
+        status['recording_file'] = None
 
     return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
@@ -241,3 +239,29 @@ def video_feed():
 @app.route("/motion_alerts")
 def motion_alerts():
     return ("motion" if state.motion_event else "nomotion"), 200
+
+
+@app.route('/settings/recording/toggle', methods=['POST'])
+@requires_auth
+def settings_recording_toggle():
+    try:
+        import wakeonpi.recorder as recorder
+        if recorder.is_recording():
+            ok, res = recorder.stop_recording()
+        else:
+            # use configured path
+            ok, res = recorder.start_recording(config.RECORDINGS_ROOT)
+        return ('', 204) if ok else (res, 500)
+    except Exception:
+        logging.getLogger('App').exception('Failed to toggle recording')
+        return ('Error', 500)
+
+@app.route('/settings/recording/status')
+@requires_auth
+def settings_recording_status():
+    try:
+        import wakeonpi.recorder as recorder
+        return ({'active': recorder.is_recording(), 'file': recorder.get_current_file()}, 200)
+    except Exception:
+        logging.getLogger('App').exception('Failed to get recording status')
+        return ({'active': False, 'file': None}, 500)

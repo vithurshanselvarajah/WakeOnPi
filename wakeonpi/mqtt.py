@@ -27,6 +27,7 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/url_set")
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/camera/refresh")
+    client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
 
     try:
@@ -41,6 +42,12 @@ def _on_connect(client, userdata, flags, rc):
             bro_state = getattr(state, 'browser_url', None)
             if bro_state:
                 publish_browser_url(bro_state)
+        try:
+            import wakeonpi.recorder as recorder
+            publish_recording_state(recorder.is_recording())
+            publish_recording_file(recorder.get_current_file())
+        except Exception:
+            pass
     except Exception:
         log.exception("Failed to publish current stream URLs on MQTT connect")
 
@@ -113,6 +120,21 @@ def _on_message(client, userdata, msg):
                     publish_camera_stream_url(cam)
             except Exception:
                 log.exception("MQTT handler failed to refresh camera stream URL")
+        elif msg.topic == f"{prefix}/command/recording/toggle":
+            try:
+                import wakeonpi.recorder as recorder
+                if recorder.is_recording():
+                    ok, res = recorder.stop_recording()
+                    publish_recording_state(False)
+                    publish_recording_file(None)
+                else:
+                    ok, res = recorder.start_recording(config.RECORDINGS_ROOT)
+                    if ok:
+                        publish_recording_state(True)
+                        publish_recording_file(res)
+                # respond by republishing status
+            except Exception:
+                log.exception("MQTT handler failed to toggle recording")
         elif msg.topic == f"{prefix}/command/settings/update":
             try:
                 data = json.loads(payload)
@@ -235,6 +257,12 @@ def publish_browser_url(url):
         pass
     publish_state("browser/url", url)
 
+def publish_recording_state(is_on):
+    publish_state("recording/active", "ON" if is_on else "OFF")
+
+def publish_recording_file(path):
+    publish_state("recording/file", path or "")
+
 
 def get_system_version():
     return _last_version
@@ -322,6 +350,42 @@ def _publish_ha_discovery(prefix):
         log.exception("Failed to publish HA browser URL discovery")
 
     try:
+        topic = f"{prefix}/state/recording/active"
+        payload = {
+            "name": f"Recording Active",
+            "state_topic": topic,
+            "unique_id": f"{prefix}_recording_active",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/binary_sensor/{prefix}_recording_active/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA recording active discovery")
+
+    try:
+        topic = f"{prefix}/state/recording/file"
+        payload = {
+            "name": f"Recording File",
+            "state_topic": topic,
+            "unique_id": f"{prefix}_recording_file",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/sensor/{prefix}_recording_file/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA recording file discovery")
+
+    try:
+        topic = f"{prefix}/command/recording/toggle"
+        payload = {
+            "name": f"Recording Toggle",
+            "command_topic": topic,
+            "unique_id": f"{prefix}_recording_toggle",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_recording_toggle/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA recording toggle discovery")
+
+    try:
         camurl_topic = f"{prefix}/state/camera/stream_url"
         payload = {
             "name": f"Camera URL",
@@ -332,40 +396,3 @@ def _publish_ha_discovery(prefix):
         _client.publish(f"homeassistant/sensor/{prefix}_camera_url/config", json.dumps(payload), retain=True)
     except Exception:
         log.exception("Failed to publish HA camera URL sensor discovery")
-
-    try:
-        topic = f"{prefix}/command/browser/refresh"
-        payload = {
-            "name": f"Browser Refresh",
-            "command_topic": topic,
-            "unique_id": f"{prefix}_browser_refresh",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser refresh command discovery")
-
-    try:
-        topic = f"{prefix}/command/camera/refresh"
-        payload = {
-            "name": f"Camera Refresh",
-            "command_topic": topic,
-            "unique_id": f"{prefix}_camera_refresh",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_camera_refresh/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA camera refresh command discovery")
-
-    try:
-        topic = f"{prefix}/command/settings/update"
-        payload = {
-            "name": f"Settings Update",
-            "command_topic": topic,
-            "payload_press": "{}",
-            "unique_id": f"{prefix}_settings_update",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_settings_update/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA settings update command discovery")
