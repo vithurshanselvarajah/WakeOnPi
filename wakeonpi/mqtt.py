@@ -1,7 +1,5 @@
-import os
 import json
 import threading
-import time
 import logging
 try:
     import paho.mqtt.client as mqtt
@@ -40,7 +38,6 @@ def _on_connect(client, userdata, flags, rc):
         if bro:
             publish_browser_url(bro)
         else:
-            # fallback to last known browser URL stored in state
             bro_state = getattr(state, 'browser_url', None)
             if bro_state:
                 publish_browser_url(bro_state)
@@ -230,7 +227,6 @@ def publish_camera_stream_url(url):
 
 def publish_browser_url(url):
     try:
-        # keep last known browser URL in shared state for other components
         try:
             state.browser_url = url
         except Exception:
@@ -238,9 +234,6 @@ def publish_browser_url(url):
     except Exception:
         pass
     publish_state("browser/url", url)
-    
-def publish_command(path, payload):
-    publish(f"command/{path}", payload)
 
 
 def get_system_version():
