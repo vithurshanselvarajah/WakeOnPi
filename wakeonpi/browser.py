@@ -35,7 +35,6 @@ class _BrowserController:
         self.current_url = None
         self._one_shot_url = None
         self._started = False
-        self._paused = False
 
     def _find_executable(self):
         for p in _DEFAULT_CHROMIUM_PATHS:
@@ -46,7 +45,6 @@ class _BrowserController:
     def _worker(self):
         try:
             self._started = True
-            self._paused = False
             log.info("Browser worker ready (process-controlled)")
             self._ready_event.set()
 
@@ -78,7 +76,6 @@ class _BrowserController:
 
             self._proc = None
             self._started = False
-            self._paused = False
             log.info("Browser worker exited")
 
     def start(self):
@@ -192,42 +189,6 @@ class _BrowserController:
                 return
             self._run_on_worker(_do)
 
-    def pause(self):
-        def _do():
-            if self._paused:
-                return
-            if self._proc and self._proc.poll() is None:
-                try:
-                    self._proc.terminate()
-                    self._proc.wait(timeout=5)
-                except Exception:
-                    log.exception("Failed to terminate chromium on pause; killing")
-                    try:
-                        self._proc.kill()
-                    except Exception:
-                        log.exception("Failed to kill chromium process on pause")
-            self._proc = None
-            self._paused = True
-
-        with _lock:
-            if not self._started:
-                return
-            self._run_on_worker(_do)
-
-    def resume(self, refresh_page=True):
-        def _do():
-            if not self._paused:
-                return
-            target = self.current_url or self._one_shot_url or "about:blank"
-            use_url = self.current_url if (self.current_url and refresh_page) else target
-            self._restart_process(use_url)
-            self._paused = False
-
-        with _lock:
-            if not self._started:
-                return
-            self._run_on_worker(_do)
-
 def _get_controller():
     global _controller
     with _lock:
@@ -246,14 +207,6 @@ def show_url(url, force=False, one_shot=False):
 
 def refresh():
     _get_controller().refresh()
-
-
-def pause():
-    _get_controller().pause()
-
-
-def resume(refresh_page=True):
-    _get_controller().resume(refresh_page=refresh_page)
 
 
 def stop():

@@ -113,9 +113,7 @@ def settings():
         ctrl = getattr(browser, "_get_controller")()
         proc = getattr(ctrl, "_proc", None)
         browser_running = proc is not None and proc.poll() is None
-        browser_paused = getattr(ctrl, "_paused", False)
         status['browser_running'] = browser_running
-        status['browser_paused'] = browser_paused
         status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)()
     except Exception:
         logging.getLogger("App").exception("Failed to read browser status")
@@ -125,12 +123,9 @@ def settings():
     status['clients_connected'] = state.clients_connected
     status['stream_url'] = getattr(state, "stream_url", None)
     try:
-        uptime = mqtt.get_system_uptime()
         version = mqtt.get_system_version()
-        status['uptime'] = uptime or 'N/A'
         status['version'] = version or 'N/A'
     except Exception:
-        status['uptime'] = 'N/A'
         status['version'] = 'N/A'
 
     return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
@@ -156,23 +151,6 @@ def settings_browser_refresh():
         return ('', 204)
     except Exception:
         logging.getLogger("App").exception("Failed to refresh browser")
-        return ('Error', 500)
-
-
-@app.route('/settings/browser/toggle', methods=['POST'])
-@requires_auth
-def settings_browser_toggle():
-    try:
-        import wakeonpi.browser as browser
-        ctrl = getattr(browser, "_get_controller")()
-        paused = getattr(ctrl, "_paused", False)
-        if paused:
-            browser.resume()
-        else:
-            browser.pause()
-        return ('', 204)
-    except Exception:
-        logging.getLogger("App").exception("Failed to toggle browser")
         return ('Error', 500)
 
 

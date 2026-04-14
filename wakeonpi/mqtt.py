@@ -17,7 +17,6 @@ log = logging.getLogger("MQTT")
 _client = None
 _connected = False
 
-_last_uptime = None
 _last_version = None
 
 
@@ -29,8 +28,6 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/screen/set")
     client.subscribe(f"{prefix}/command/browser/url_set")
     client.subscribe(f"{prefix}/command/browser/refresh")
-    client.subscribe(f"{prefix}/command/browser/pause")
-    client.subscribe(f"{prefix}/command/browser/resume")
     client.subscribe(f"{prefix}/command/camera/refresh")
     client.subscribe(f"{prefix}/command/settings/update")
 
@@ -46,7 +43,6 @@ def _on_connect(client, userdata, flags, rc):
         log.exception("Failed to publish current stream URLs on MQTT connect")
 
     try:
-        uptime = int(time.time() - getattr(state, "start_time", time.time()))
         try:
             pjpath = Path(__file__).parent.parent / 'pyproject.toml'
             version = None
@@ -60,11 +56,9 @@ def _on_connect(client, userdata, flags, rc):
                             break
         except Exception:
             version = getattr(config, 'VERSION', '0.0.1')
-        publish_state('system/uptime', str(uptime))
         publish_state('system/version', str(version))
         try:
-            global _last_uptime, _last_version
-            _last_uptime = str(uptime)
+            global _last_version
             _last_version = str(version)
         except Exception:
             pass
@@ -110,18 +104,6 @@ def _on_message(client, userdata, msg):
                 browser.refresh()
             except Exception:
                 log.exception("MQTT handler failed to refresh browser")
-        elif msg.topic == f"{prefix}/command/browser/pause":
-            try:
-                import wakeonpi.browser as browser
-                browser.pause()
-            except Exception:
-                log.exception("MQTT handler failed to pause browser")
-        elif msg.topic == f"{prefix}/command/browser/resume":
-            try:
-                import wakeonpi.browser as browser
-                browser.resume()
-            except Exception:
-                log.exception("MQTT handler failed to resume browser")
         elif msg.topic == f"{prefix}/command/camera/refresh":
             try:
                 cam = getattr(state, "stream_url", None)
@@ -225,10 +207,8 @@ def publish(topic_suffix, payload):
 
 def publish_state(path, payload):
     try:
-        global _last_uptime, _last_version
-        if path == 'system/uptime':
-            _last_uptime = payload
-        elif path == 'system/version':
+        global _last_version
+        if path == 'system/version':
             _last_version = payload
     except Exception:
         pass
@@ -248,10 +228,6 @@ def publish_browser_current_page(url):
     
 def publish_command(path, payload):
     publish(f"command/{path}", payload)
-
-
-def get_system_uptime():
-    return _last_uptime
 
 
 def get_system_version():
@@ -314,19 +290,6 @@ def _publish_ha_discovery(prefix):
         log.exception("Failed to publish HA camera discovery")
 
     try:
-        uptime_topic = f"{prefix}/state/system/uptime"
-        payload = {
-            "name": f"Uptime",
-            "state_topic": uptime_topic,
-            "unit_of_measurement": "s",
-            "unique_id": f"{prefix}_uptime",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/sensor/{prefix}_uptime/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA uptime sensor discovery")
-
-    try:
         version_topic = f"{prefix}/state/system/version"
         payload = {
             "name": f"Version",
@@ -373,30 +336,6 @@ def _publish_ha_discovery(prefix):
         _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
     except Exception:
         log.exception("Failed to publish HA browser refresh command discovery")
-
-    try:
-        topic = f"{prefix}/command/browser/pause"
-        payload = {
-            "name": f"Browser Pause",
-            "command_topic": topic,
-            "unique_id": f"{prefix}_browser_pause",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_browser_pause/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser pause command discovery")
-
-    try:
-        topic = f"{prefix}/command/browser/resume"
-        payload = {
-            "name": f"Browser Resume",
-            "command_topic": topic,
-            "unique_id": f"{prefix}_browser_resume",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_browser_resume/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser resume command discovery")
 
     try:
         topic = f"{prefix}/command/browser/url_set"
