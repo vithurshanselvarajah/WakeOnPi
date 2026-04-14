@@ -1,31 +1,16 @@
 import threading
 import os
-import shutil
 import time
 import logging
 import queue
 import subprocess
 import json
-try:
-    import urllib.request
-except ImportError:
-    urllib = None
+import urllib.request
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
-
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("BrowserController")
 
-_DEFAULT_CHROMIUM_PATHS = [
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium-browser-stable"
-]
-_USER_DATA_DIR = os.path.expanduser("~/.config/wakeonpi_browser")
-
+_DEFAULT_CHROMIUM_PATHS = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium-browser-stable"]
 _lock = threading.Lock()
 _controller = None
 
@@ -48,10 +33,21 @@ class _BrowserController:
                 return p
         return None
 
+    def _get_browser_url_from_cdp(self):
+        try:
+            req = urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=2)
+            data = json.loads(req.read().decode())
+            for tab in data:
+                if tab.get("type") == "page":
+                    return tab.get("url")
+        except Exception:
+            pass
+        return None
+
     def _worker(self):
         try:
             self._started = True
-            log.info("Browser worker ready (process-controlled)")
+            log.info("Browser worker ready")
             self._ready_event.set()
 
             while not self._stop_event.is_set():
@@ -63,72 +59,45 @@ class _BrowserController:
                     result = cmd()
                     resp_q.put((True, result))
                 except Exception as e:
-                    log.exception("Exception while executing browser command in worker")
+                    log.exception("Exception in browser command")
                     resp_q.put((False, e))
-
         except Exception:
-            log.exception("Browser worker encountered an unexpected error")
+            log.exception("Browser worker error")
             self._ready_event.set()
         finally:
-            try:
-                if self._proc:
-                    try:
-                        self._proc.terminate()
-                        self._proc.wait(timeout=5)
-                    except Exception:
-                        log.exception("Error terminating chromium process during cleanup")
-            except Exception:
-                log.exception("Error during cleanup of chromium process")
-
+            if self._proc:
+                try:
+                    self._proc.terminate()
+                    self._proc.wait(timeout=5)
+                except Exception:
+                    pass
             self._proc = None
             self._started = False
             log.info("Browser worker exited")
 
-    def _get_browser_url_from_cdp(self):
-        """Get the current URL from Chrome DevTools Protocol."""
-        if urllib is None:
-            return None
-        try:
-            req = urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=2)
-            data = json.loads(req.read().decode())
-            for tab in data:
-                if tab.get("type") == "page":
-                    return tab.get("url")
-        except Exception:
-            pass
-        return None
-
     def _url_monitor_loop(self):
-        """Monitor browser URL changes via CDP and update state."""
         log.info("URL monitor thread started")
         while not self._stop_event.is_set():
             try:
                 if self._proc and self._proc.poll() is None:
                     url = self._get_browser_url_from_cdp()
                     if url and not url.startswith("about:"):
-                        # publish if the URL is different from last published URL in state
-                        last_published = None
-                        try:
-                            from . import state as _state
-                            last_published = getattr(_state, 'browser_url', None)
-                        except Exception:
-                            last_published = None
-
+                        from . import state as _state
+                        last_published = getattr(_state, 'browser_url', None)
                         if url != last_published:
                             log.info(f"Browser navigated to: {url}")
                             self.current_url = url
                             try:
-                                import wakeonpi.mqtt as mqtt
+                                from . import mqtt
                                 mqtt.publish_browser_url(url)
                             except Exception:
-                                log.exception("Failed to publish browser URL after navigation")
+                                log.exception("Failed to publish browser URL")
             except Exception:
                 log.exception("Error in URL monitor loop")
             time.sleep(2)
         log.info("URL monitor thread exited")
 
     def _start_url_monitor(self):
-        """Start the URL monitoring thread if not already running."""
         if self._url_monitor_thread is None or not self._url_monitor_thread.is_alive():
             self._url_monitor_thread = threading.Thread(target=self._url_monitor_loop, daemon=True)
             self._url_monitor_thread.start()
@@ -137,18 +106,23 @@ class _BrowserController:
         with _lock:
             if self._thread is not None and self._thread.is_alive():
                 return
-
             self._stop_event.clear()
             self._ready_event.clear()
             self._thread = threading.Thread(target=self._worker, daemon=True)
             self._thread.start()
 
         if not self._ready_event.wait(15):
-            log.error("Timeout waiting for browser worker to start")
+            log.error("Timeout waiting for browser worker")
             raise RuntimeError("Timeout starting browser worker")
 
         if not self._started:
             raise RuntimeError("Browser worker failed to start")
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=5)
+        self._thread = None
 
     def ensure_started(self):
         if not self._started:
@@ -157,7 +131,6 @@ class _BrowserController:
     def _run_on_worker(self, fn, wait=True):
         if threading.current_thread() is self._thread:
             return fn()
-
         resp_q = queue.Queue()
         self._cmd_queue.put((fn, resp_q))
         if not wait:
@@ -167,24 +140,50 @@ class _BrowserController:
             raise val
         return val
 
+    def _restart_process(self, url):
+        if self._proc and self._proc.poll() is None:
+            try:
+                self._proc.terminate()
+                self._proc.wait(timeout=5)
+            except Exception:
+                try:
+                    self._proc.kill()
+                except Exception:
+                    pass
+
+        exe = self._find_executable()
+        if not exe:
+            raise RuntimeError("Chromium executable not found")
+
+        args = [exe, "--kiosk", "--no-first-run", "--disable-infobars",
+                "--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1", url]
+        try:
+            self._proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.current_url = url
+        except Exception:
+            log.exception("Failed to start chromium")
+            self._proc = None
+            raise RuntimeError("Failed to start chromium")
+
+        try:
+            from . import mqtt
+            mqtt.publish_browser_url(url)
+        except Exception:
+            log.exception("Failed to publish browser URL")
+
+        self._start_url_monitor()
+
     def show_url(self, url, force=False, one_shot=False):
         def _do():
             if not url:
                 log.error("show_url called with empty URL")
                 return
-
             if one_shot:
                 self._one_shot_url = url
             else:
                 self.current_url = url
-
             try:
                 self._restart_process(url)
-                try:
-                    import wakeonpi.mqtt as mqtt
-                    mqtt.publish_browser_url(url)
-                except Exception:
-                    log.exception("Failed to publish browser stream URL after show_url")
             finally:
                 self._one_shot_url = None
 
@@ -192,68 +191,18 @@ class _BrowserController:
             self.ensure_started()
             self._run_on_worker(_do)
 
-    def _restart_process(self, url):
-        try:
-            if self._proc and self._proc.poll() is None:
-                try:
-                    self._proc.terminate()
-                    self._proc.wait(timeout=5)
-                except Exception:
-                    log.exception("Failed to terminate existing chromium process; killing")
-                    try:
-                        self._proc.kill()
-                    except Exception:
-                        log.exception("Failed to kill chromium process")
-        except Exception:
-            log.exception("Error while stopping existing chromium process")
-
-        exe = self._find_executable()
-        if not exe:
-            raise RuntimeError("Chromium executable not found")
-
-        args = [
-            exe,
-            "--kiosk",
-            "--no-first-run",
-            "--disable-infobars",
-            "--remote-debugging-port=9222",
-            "--remote-debugging-address=127.0.0.1",
-            url,
-        ]
-
-        try:
-            self._proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.current_url = url
-        except Exception:
-            log.exception("Failed to start chromium process")
-            self._proc = None
-            raise RuntimeError("Failed to start chromium process")
-        try:
-            import wakeonpi.mqtt as mqtt
-            mqtt.publish_browser_url(url)
-        except Exception:
-            log.exception("Failed to publish browser stream URL after chromium start")
-        
-        self._start_url_monitor()
-
     def refresh(self):
         def _do():
-            # Reload to default dashboard URL if configured, otherwise fall back to current_url
-            try:
-                import wakeonpi.config as config
-                default = config.current_settings().get("HASS_DASHBOARD_URL")
-            except Exception:
-                default = None
-
+            from . import config
+            default = config.current_settings().get("HASS_DASHBOARD_URL")
             url = default or self.current_url
-            if not url:
-                return
-            self._restart_process(url)
+            if url:
+                self._restart_process(url)
 
         with _lock:
-            if not self._started:
-                return
-            self._run_on_worker(_do)
+            if self._started:
+                self._run_on_worker(_do)
+
 
 def _get_controller():
     global _controller

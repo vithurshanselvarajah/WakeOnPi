@@ -1,237 +1,185 @@
-import cv2
 import socket
-import os
-from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template
 import logging
-import time
+from pathlib import Path
+import cv2
+from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template
 
-from . import state
+from . import state, config, mqtt, browser, recorder
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed
 from .auth import requires_auth
-from . import motion, mqtt, config, browser
+from .motion import start_motion_thread
 
 app = Flask(__name__)
+log = logging.getLogger("App")
 
 mqtt.start()
 try:
-    logging.getLogger("App").info("Starting browser service by default")
+    log.info("Starting browser service")
     browser.start()
 except Exception:
-    logging.getLogger("App").exception("Failed to start browser service")
+    log.exception("Failed to start browser service")
 
-motion.start_motion_thread()
+start_motion_thread()
 
 
 def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
-    except Exception:
-        ip = "127.0.0.1"
-    finally:
         s.close()
-    return ip
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 
 host = get_local_ip()
 port = 5000
 state.stream_url = f"http://{host}:{port}"
 mqtt.publish_camera_stream_url(state.stream_url)
 
+SENSITIVE_PLACEHOLDER = "__**password_not_changed**__"
+SETTINGS_KEYS = [
+    "MOTION_THRESHOLD", "INACTIVITY_TIMEOUT", "CHECK_INTERVAL",
+    "MQTT_HOST", "MQTT_PORT", "MQTT_TOPIC_PREFIX", "MQTT_USERNAME", "MQTT_PASSWORD",
+    "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT"
+]
+
+
+def _parse_setting(key, val):
+    if key == "MOTION_THRESHOLD":
+        return int(val)
+    if key in ("INACTIVITY_TIMEOUT", "CHECK_INTERVAL"):
+        return float(val)
+    if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
+        return val if val != SENSITIVE_PLACEHOLDER else None
+    return val
+
+
+def _test_path_writable(path):
+    try:
+        p = Path(path)
+        p.mkdir(parents=True, exist_ok=True)
+        testfile = p / '.writetest'
+        testfile.write_text('ok')
+        testfile.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
 @app.route("/settings", methods=["GET", "POST"])
 @requires_auth
 def settings():
-    sensitive_placeholder = "__**password_not_changed**__"
-
     if request.method == "POST":
         updates = {}
-        s = config.current_settings()
-        keys = [
-            "MOTION_THRESHOLD",
-            "INACTIVITY_TIMEOUT",
-            "CHECK_INTERVAL",
-            "MQTT_HOST",
-            "MQTT_PORT",
-            "MQTT_TOPIC_PREFIX",
-            "MQTT_USERNAME",
-            "MQTT_PASSWORD",
-            "HTTP_USERNAME",
-            "HTTP_PASSWORD",
-            "HASS_DASHBOARD_URL",
-            "BACKLIGHT_PATH",
-            "RECORDINGS_ROOT",
-        ]
-
-        for key in keys:
-            if key in request.form:
-                val = request.form.get(key)
-                if key == "MOTION_THRESHOLD":
-                    try:
-                        updates[key] = int(val)
-                    except Exception:
-                        continue
-                elif key in ("INACTIVITY_TIMEOUT", "CHECK_INTERVAL"):
-                    try:
-                        updates[key] = float(val)
-                    except Exception:
-                        continue
-                elif key == "MQTT_PASSWORD":
-                    if val == sensitive_placeholder:
-                        continue
-                    updates[key] = val or None
-                elif key == "HTTP_PASSWORD":
-                    if val == sensitive_placeholder:
-                        continue
-                    updates[key] = val or None
-                else:
-                    updates[key] = val
+        for key in SETTINGS_KEYS:
+            if key not in request.form:
+                continue
+            val = request.form.get(key)
+            if key in ("MQTT_PASSWORD", "HTTP_PASSWORD") and val == SENSITIVE_PLACEHOLDER:
+                continue
+            try:
+                updates[key] = _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+            except Exception:
+                continue
 
         if updates:
             config.update_settings(**updates)
             try:
-                import wakeonpi.motion as motion_mod
-                motion_mod.config = config
-            except Exception:
-                pass
-            try:
                 mqtt.restart()
             except Exception:
-                logging.getLogger("App").exception("Failed to restart MQTT after settings change")
-            try:
-                # ensure recordings path exists
-                rr = updates.get('RECORDINGS_ROOT') or config.RECORDINGS_ROOT
-                from pathlib import Path
-                Path(rr).mkdir(parents=True, exist_ok=True)
-                # test writable
+                log.exception("Failed to restart MQTT after settings change")
+
+            if "RECORDINGS_ROOT" in updates:
+                rr = updates["RECORDINGS_ROOT"] or config.RECORDINGS_ROOT
+                state.temp_recordings_test = {"path": rr, "writable": _test_path_writable(rr)}
+
+            if "BACKLIGHT_PATH" in updates and updates["BACKLIGHT_PATH"]:
+                bp = updates["BACKLIGHT_PATH"]
                 try:
-                    testfile = Path(rr) / '.writetest'
-                    with testfile.open('w') as f:
-                        f.write('ok')
-                    try:
-                        testfile.unlink()
-                    except Exception:
-                        pass
-                    state.temp_recordings_test = {'path': rr, 'writable': True}
+                    with open(bp, 'w') as f:
+                        f.write('0')
+                    state.temp_backlight_test = {"path": bp, "writable": True}
                 except Exception:
-                    state.temp_recordings_test = {'path': rr, 'writable': False}
-            except Exception:
-                pass
-            # if BACKLIGHT_PATH changed, attempt to write and record status
-            try:
-                bp = updates.get('BACKLIGHT_PATH')
-                if bp:
-                    try:
-                        with open(bp, 'w') as f:
-                            f.write('0')
-                        state.temp_backlight_test = {'path': bp, 'writable': True}
-                    except Exception:
-                        state.temp_backlight_test = {'path': bp, 'writable': False}
-                else:
-                    state.temp_backlight_test = None
-            except Exception:
-                state.temp_backlight_test = None
+                    state.temp_backlight_test = {"path": bp, "writable": False}
+
         return redirect(url_for("settings"))
 
     s = config.current_settings()
-    pwd_display = sensitive_placeholder if s.get("MQTT_PASSWORD") else ""
-    http_pwd_display = sensitive_placeholder if s.get("HTTP_PASSWORD") else ""
+    pwd_display = SENSITIVE_PLACEHOLDER if s.get("MQTT_PASSWORD") else ""
+    http_pwd_display = SENSITIVE_PLACEHOLDER if s.get("HTTP_PASSWORD") else ""
 
-    status = {}
-    try:
-        status['mqtt_connected'] = getattr(mqtt, "is_connected", lambda: False)()
-        status['mqtt_host'] = s.get('MQTT_HOST')
-        status['mqtt_port'] = s.get('MQTT_PORT')
-        status['mqtt_topic_prefix'] = config.MQTT_TOPIC_PREFIX
-    except Exception:
-        logging.getLogger("App").exception("Failed to read MQTT status")
+    status = {
+        "mqtt_connected": mqtt.is_connected(),
+        "mqtt_host": s.get("MQTT_HOST"),
+        "mqtt_port": s.get("MQTT_PORT"),
+        "mqtt_topic_prefix": config.MQTT_TOPIC_PREFIX,
+        "motion_event": state.motion_event,
+        "display_on": state.display_on,
+        "clients_connected": state.clients_connected,
+        "stream_url": getattr(state, "stream_url", None),
+        "version": mqtt.get_system_version() or "N/A",
+        "recording_active": recorder.is_recording(),
+        "recording_file": recorder.get_current_file(),
+    }
 
     try:
-        ctrl = getattr(browser, "_get_controller")()
+        ctrl = browser._get_controller()
         proc = getattr(ctrl, "_proc", None)
-        browser_running = proc is not None and proc.poll() is None
-        status['browser_running'] = browser_running
-        status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)() or s.get("HASS_DASHBOARD_URL")
+        status["browser_running"] = proc is not None and proc.poll() is None
+        status["browser_current_url"] = ctrl.current_url or browser.get_current_url() or s.get("HASS_DASHBOARD_URL")
     except Exception:
-        logging.getLogger("App").exception("Failed to read browser status")
+        status["browser_running"] = False
+        status["browser_current_url"] = None
 
-    status['motion_event'] = state.motion_event
-    status['display_on'] = state.display_on
-    status['clients_connected'] = state.clients_connected
-    status['stream_url'] = getattr(state, "stream_url", None)
-    try:
-        version = mqtt.get_system_version()
-        status['version'] = version or 'N/A'
-    except Exception:
-        status['version'] = 'N/A'
-    # recording status
-    try:
-        from . import recorder
-        status['recording_active'] = recorder.is_recording()
-        status['recording_file'] = recorder.get_current_file()
-    except Exception:
-        status['recording_active'] = False
-        status['recording_file'] = None
+    bl_test = getattr(state, "temp_backlight_test", None)
+    status["last_backlight_test"] = bl_test
+    status["backlight_path"] = bl_test["path"] if bl_test else s.get("BACKLIGHT_PATH")
+    status["backlight_writable"] = bl_test["writable"] if bl_test else None
 
-    # expose last test results for backlight and recordings to template
-    try:
-        status['last_backlight_test'] = getattr(state, 'temp_backlight_test', None)
-        status['backlight_path'] = status['last_backlight_test']['path'] if status['last_backlight_test'] else s.get('BACKLIGHT_PATH')
-        status['backlight_writable'] = status['last_backlight_test']['writable'] if status['last_backlight_test'] else None
-    except Exception:
-        status['last_backlight_test'] = None
-        status['backlight_path'] = s.get('BACKLIGHT_PATH')
-        status['backlight_writable'] = None
+    rec_test = getattr(state, "temp_recordings_test", None)
+    status["last_recordings_test"] = rec_test
+    status["recordings_root"] = rec_test["path"] if rec_test else s.get("RECORDINGS_ROOT")
+    status["recordings_writable"] = rec_test["writable"] if rec_test else None
 
-    try:
-        status['last_recordings_test'] = getattr(state, 'temp_recordings_test', None)
-        status['recordings_root'] = status['last_recordings_test']['path'] if status['last_recordings_test'] else s.get('RECORDINGS_ROOT')
-        status['recordings_writable'] = status['last_recordings_test']['writable'] if status['last_recordings_test'] else None
-    except Exception:
-        status['last_recordings_test'] = None
-        status['recordings_root'] = s.get('RECORDINGS_ROOT')
-        status['recordings_writable'] = None
-
-    return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
+    return render_template("settings.html", s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
 
-@app.route('/settings/mqtt/reconnect', methods=['POST'])
+@app.route("/settings/mqtt/reconnect", methods=["POST"])
 @requires_auth
 def settings_mqtt_reconnect():
     try:
         mqtt.restart()
-        return ('', 204)
+        return "", 204
     except Exception:
-        logging.getLogger("App").exception("Failed to reconnect MQTT")
-        return ('Error', 500)
+        log.exception("Failed to reconnect MQTT")
+        return "Error", 500
 
 
-@app.route('/settings/browser/refresh', methods=['POST'])
+@app.route("/settings/browser/refresh", methods=["POST"])
 @requires_auth
 def settings_browser_refresh():
     try:
-        import wakeonpi.browser as browser
         browser.refresh()
-        return ('', 204)
+        return "", 204
     except Exception:
-        logging.getLogger("App").exception("Failed to refresh browser")
-        return ('Error', 500)
+        log.exception("Failed to refresh browser")
+        return "Error", 500
 
 
-@app.route('/settings/restart', methods=['POST'])
+@app.route("/settings/restart", methods=["POST"])
 @requires_auth
 def settings_restart():
     try:
         mqtt.restart()
-        try:
-            import wakeonpi.browser as browser
-            browser.stop()
-            browser.start()
-        except Exception:
-            logging.getLogger("App").exception("Failed to restart browser during full restart")
-        return ('', 204)
+        browser.stop()
+        browser.start()
+        return "", 204
     except Exception:
-        logging.getLogger("App").exception("Failed to restart services")
-        return ('Error', 500)
+        log.exception("Failed to restart services")
+        return "Error", 500
+
 
 @app.route("/")
 @requires_auth
@@ -240,24 +188,14 @@ def video_feed():
     def gen():
         with state.clients_lock:
             state.clients_connected += 1
-
         switch_to_full_mode()
-
         try:
             while True:
                 frame = picam2.capture_array("main")
                 frame = cv2.resize(frame, (854, 480))
-
                 ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-                if not ret:
-                    continue
-
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n"
-                    + jpeg.tobytes()
-                    + b"\r\n"
-                )
+                if ret:
+                    yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n"
         finally:
             with state.clients_lock:
                 state.clients_connected -= 1
@@ -272,27 +210,25 @@ def motion_alerts():
     return ("motion" if state.motion_event else "nomotion"), 200
 
 
-@app.route('/settings/recording/toggle', methods=['POST'])
+@app.route("/settings/recording/toggle", methods=["POST"])
 @requires_auth
 def settings_recording_toggle():
     try:
-        import wakeonpi.recorder as recorder
         if recorder.is_recording():
             ok, res = recorder.stop_recording()
         else:
-            # use configured path
             ok, res = recorder.start_recording(config.RECORDINGS_ROOT)
-        return ('', 204) if ok else (res, 500)
+        return ("", 204) if ok else (res, 500)
     except Exception:
-        logging.getLogger('App').exception('Failed to toggle recording')
-        return ('Error', 500)
+        log.exception("Failed to toggle recording")
+        return "Error", 500
 
-@app.route('/settings/recording/status')
+
+@app.route("/settings/recording/status")
 @requires_auth
 def settings_recording_status():
     try:
-        import wakeonpi.recorder as recorder
-        return ({'active': recorder.is_recording(), 'file': recorder.get_current_file()}, 200)
+        return {"active": recorder.is_recording(), "file": recorder.get_current_file()}, 200
     except Exception:
-        logging.getLogger('App').exception('Failed to get recording status')
-        return ({'active': False, 'file': None}, 500)
+        log.exception("Failed to get recording status")
+        return {"active": False, "file": None}, 500

@@ -1,6 +1,8 @@
 import json
 import threading
 import logging
+from pathlib import Path
+
 try:
     import paho.mqtt.client as mqtt
 except Exception:
@@ -8,13 +10,11 @@ except Exception:
 
 from . import config, state
 from .display import set_display
-from pathlib import Path
 
 log = logging.getLogger("MQTT")
 
 _client = None
 _connected = False
-
 _last_version = None
 
 
@@ -34,52 +34,47 @@ def _on_connect(client, userdata, flags, rc):
         cam = getattr(state, "stream_url", None)
         if cam:
             publish_camera_stream_url(cam)
-        import wakeonpi.browser as browser
-        bro = getattr(browser, "get_current_url", lambda: None)()
+        from . import browser
+        bro = browser.get_current_url()
         if bro:
             publish_browser_url(bro)
-        else:
-            bro_state = getattr(state, 'browser_url', None)
-            if bro_state:
-                publish_browser_url(bro_state)
+        elif getattr(state, "browser_url", None):
+            publish_browser_url(state.browser_url)
         try:
-            import wakeonpi.recorder as recorder
+            from . import recorder
             publish_recording_state(recorder.is_recording())
         except Exception:
             pass
     except Exception:
-        log.exception("Failed to publish current stream URLs on MQTT connect")
+        log.exception("Failed to publish stream URLs on connect")
 
     try:
-        try:
-            pjpath = Path(__file__).parent.parent / 'pyproject.toml'
-            version = None
-            if pjpath.exists():
-                with pjpath.open('r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith('version') and '=' in line:
-                            _, val = line.split('=', 1)
-                            version = val.strip().strip('"').strip("'")
-                            break
-        except Exception:
-            version = getattr(config, 'VERSION', '0.0.1')
-        publish_state('system/version', str(version))
-        try:
-            global _last_version
-            _last_version = str(version)
-        except Exception:
-            pass
+        version = _get_version()
+        publish_state("system/version", str(version))
+        global _last_version
+        _last_version = str(version)
     except Exception:
-        log.exception("Failed to publish system info on MQTT connect")
+        log.exception("Failed to publish system info")
 
     try:
-        try:
-            _publish_ha_discovery(prefix)
-        except Exception:
-            log.exception("Failed to publish Home Assistant discovery messages")
+        _publish_ha_discovery(prefix)
+    except Exception:
+        log.exception("Failed to publish HA discovery")
+
+
+def _get_version():
+    try:
+        pjpath = Path(__file__).parent.parent / "pyproject.toml"
+        if pjpath.exists():
+            with pjpath.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("version") and "=" in line:
+                        _, val = line.split("=", 1)
+                        return val.strip().strip('"').strip("'")
     except Exception:
         pass
+    return getattr(config, "VERSION", "0.0.1")
 
 
 def _on_disconnect(client, userdata, rc):
@@ -91,47 +86,49 @@ def _on_disconnect(client, userdata, rc):
 def _on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode()
-        log.debug(f"MQTT message received: topic={msg.topic} payload={payload}")
+        log.debug(f"MQTT message: topic={msg.topic} payload={payload}")
         prefix = config.MQTT_TOPIC_PREFIX
+
         if msg.topic == f"{prefix}/command/screen/set":
             val = payload.lower() in ("1", "true", "on", "open")
             state.manual_display_override = True
             set_display(val)
             state.display_on = val
             publish_display(val)
+
         elif msg.topic == f"{prefix}/command/browser/url_set":
             try:
-                import wakeonpi.browser as browser
+                from . import browser
                 browser.show_url(payload, force=True, one_shot=True)
                 publish_browser_url(payload)
             except Exception:
-                log.exception("MQTT handler failed to set browser URL")
+                log.exception("Failed to set browser URL")
+
         elif msg.topic == f"{prefix}/command/browser/refresh":
             try:
-                import wakeonpi.browser as browser
+                from . import browser
                 browser.refresh()
             except Exception:
-                log.exception("MQTT handler failed to refresh browser")
+                log.exception("Failed to refresh browser")
+
         elif msg.topic == f"{prefix}/command/camera/refresh":
-            try:
-                cam = getattr(state, "stream_url", None)
-                if cam:
-                    publish_camera_stream_url(cam)
-            except Exception:
-                log.exception("MQTT handler failed to refresh camera stream URL")
+            cam = getattr(state, "stream_url", None)
+            if cam:
+                publish_camera_stream_url(cam)
+
         elif msg.topic == f"{prefix}/command/recording/toggle":
             try:
-                import wakeonpi.recorder as recorder
+                from . import recorder
                 if recorder.is_recording():
-                    ok, res = recorder.stop_recording()
+                    recorder.stop_recording()
                     publish_recording_state(False)
                 else:
-                    ok, res = recorder.start_recording(config.RECORDINGS_ROOT)
+                    ok, _ = recorder.start_recording(config.RECORDINGS_ROOT)
                     if ok:
                         publish_recording_state(True)
-                # respond by republishing status
             except Exception:
-                log.exception("MQTT handler failed to toggle recording")
+                log.exception("Failed to toggle recording")
+
         elif msg.topic == f"{prefix}/command/settings/update":
             try:
                 data = json.loads(payload)
@@ -139,20 +136,17 @@ def _on_message(client, userdata, msg):
                 updates = {k: v for k, v in data.items() if k in allowed}
                 if updates:
                     config.update_settings(**updates)
+                    restart()
                     try:
-                        restart()
-                    except Exception:
-                        log.exception("Failed to restart MQTT after settings update via MQTT")
-                    try:
-                        import wakeonpi.browser as browser
+                        from . import browser
                         browser.stop()
                         browser.start()
                     except Exception:
-                        log.exception("Failed to restart browser after settings update via MQTT")
+                        log.exception("Failed to restart browser after settings update")
             except Exception:
-                log.exception("Failed to parse settings update message")
+                log.exception("Failed to parse settings update")
     except Exception:
-        log.exception("Unexpected error in MQTT on_message handler")
+        log.exception("Error in MQTT message handler")
 
 
 def start():
@@ -163,11 +157,11 @@ def start():
         return
     if _client is not None and _connected:
         return
-    if _client is not None and not _connected:
+    if _client is not None:
         try:
             stop()
         except Exception:
-            log.exception("Error stopping existing MQTT client")
+            pass
 
     cfg = config.current_settings()
     _client = mqtt.Client()
@@ -181,15 +175,10 @@ def start():
         port = int(cfg.get("MQTT_PORT") or 1883)
         log.info(f"Connecting to MQTT {host}:{port}")
         _client.connect(host, port)
-        t = threading.Thread(target=_client.loop_forever, daemon=True)
-        t.start()
-
+        threading.Thread(target=_client.loop_forever, daemon=True).start()
     except Exception:
         log.exception("MQTT connect error")
-        try:
-            _client = None
-        except Exception:
-            pass
+        _client = None
         _connected = False
 
 
@@ -199,13 +188,11 @@ def stop():
         _connected = False
         return
     try:
-        try:
-            _client.disconnect()
-        except Exception:
-            pass
-        _client = None
-    finally:
-        _connected = False
+        _client.disconnect()
+    except Exception:
+        pass
+    _client = None
+    _connected = False
 
 
 def restart():
@@ -224,16 +211,13 @@ def publish(topic_suffix, payload):
         full = f"{config.MQTT_TOPIC_PREFIX}/{topic_suffix}"
         _client.publish(full, payload, retain=True)
     except Exception:
-        log.exception(f"Failed to publish MQTT message: {topic_suffix} -> {payload}")
+        log.exception(f"Failed to publish: {topic_suffix}")
 
 
 def publish_state(path, payload):
-    try:
-        global _last_version
-        if path == 'system/version':
-            _last_version = payload
-    except Exception:
-        pass
+    global _last_version
+    if path == "system/version":
+        _last_version = payload
     publish(f"state/{path}", payload)
 
 
@@ -250,13 +234,7 @@ def publish_camera_stream_url(url):
 
 
 def publish_browser_url(url):
-    try:
-        try:
-            state.browser_url = url
-        except Exception:
-            pass
-    except Exception:
-        pass
+    state.browser_url = url
     publish_state("browser/url", url)
 
 
@@ -269,7 +247,6 @@ def get_system_version():
 
 
 def _publish_ha_discovery(prefix):
-    """Publish Home Assistant MQTT discovery payloads for camera, motion binary_sensor and screen switch."""
     if _client is None:
         return
 
@@ -280,124 +257,61 @@ def _publish_ha_discovery(prefix):
         "model": "Raspberry Pi",
     }
 
-    try:
-        motion_topic = f"{prefix}/state/motion"
-        payload = {
-            "name": f"Motion",
-            "state_topic": motion_topic,
+    discoveries = [
+        ("binary_sensor", f"{prefix}_motion", {
+            "name": "Motion",
+            "state_topic": f"{prefix}/state/motion",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "unique_id": f"{prefix}_motion",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/binary_sensor/{prefix}_motion/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA motion discovery")
-
-    try:
-        cmd_topic = f"{prefix}/command/screen/set"
-        state_topic = f"{prefix}/state/screen"
-        payload = {
-            "name": f"Screen",
-            "command_topic": cmd_topic,
-            "state_topic": state_topic,
+        }),
+        ("switch", f"{prefix}_screen", {
+            "name": "Screen",
+            "command_topic": f"{prefix}/command/screen/set",
+            "state_topic": f"{prefix}/state/screen",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "unique_id": f"{prefix}_screen",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/switch/{prefix}_screen/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA screen switch discovery")
-
-    try:
-        stream = getattr(state, 'stream_url', None)
-        if stream:
-            payload = {
-                "name": f"Stream",
-                "mjpeg_url": stream,
-                "unique_id": f"{prefix}_camera",
-                "device": device,
-            }
-            _client.publish(f"homeassistant/camera/{prefix}_camera/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA camera discovery")
-
-    try:
-        version_topic = f"{prefix}/state/system/version"
-        payload = {
-            "name": f"Version",
-            "state_topic": version_topic,
-            "unique_id": f"{prefix}_version",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/sensor/{prefix}_version/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA version sensor discovery")
-
-    try:
-        browser_topic = f"{prefix}/state/browser/url"
-        cmd_topic = f"{prefix}/command/browser/url_set"
-        payload = {
-            "name": f"Browser URL",
-            "state_topic": browser_topic,
-            "command_topic": cmd_topic,
-            "unique_id": f"{prefix}_browser_url",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/text/{prefix}_browser_url/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser URL discovery")
-
-    try:
-        refresh_cmd = f"{prefix}/command/browser/refresh"
-        payload = {
-            "name": f"Browser Refresh",
-            "command_topic": refresh_cmd,
-            "unique_id": f"{prefix}_browser_refresh",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser refresh discovery")
-
-    try:
-        topic = f"{prefix}/state/recording/active"
-        payload = {
-            "name": f"Recording Active",
-            "state_topic": topic,
-            "unique_id": f"{prefix}_recording_active",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/binary_sensor/{prefix}_recording_active/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA recording active discovery")
-
-    try:
-        # expose recording as a switch (toggle) in Home Assistant
-        rec_cmd = f"{prefix}/command/recording/toggle"
-        rec_state = f"{prefix}/state/recording/active"
-        payload = {
-            "name": f"Recording",
-            "command_topic": rec_cmd,
-            "state_topic": rec_state,
+        }),
+        ("sensor", f"{prefix}_version", {
+            "name": "Version",
+            "state_topic": f"{prefix}/state/system/version",
+        }),
+        ("text", f"{prefix}_browser_url", {
+            "name": "Browser URL",
+            "state_topic": f"{prefix}/state/browser/url",
+            "command_topic": f"{prefix}/command/browser/url_set",
+        }),
+        ("button", f"{prefix}_browser_refresh", {
+            "name": "Browser Refresh",
+            "command_topic": f"{prefix}/command/browser/refresh",
+        }),
+        ("binary_sensor", f"{prefix}_recording_active", {
+            "name": "Recording Active",
+            "state_topic": f"{prefix}/state/recording/active",
+        }),
+        ("switch", f"{prefix}_recording", {
+            "name": "Recording",
+            "command_topic": f"{prefix}/command/recording/toggle",
+            "state_topic": f"{prefix}/state/recording/active",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "unique_id": f"{prefix}_recording",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/switch/{prefix}_recording/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA recording switch discovery")
+        }),
+        ("sensor", f"{prefix}_camera_url", {
+            "name": "Camera URL",
+            "state_topic": f"{prefix}/state/camera/stream_url",
+        }),
+    ]
 
-    try:
-        camurl_topic = f"{prefix}/state/camera/stream_url"
-        payload = {
-            "name": f"Camera URL",
-            "state_topic": camurl_topic,
-            "unique_id": f"{prefix}_camera_url",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/sensor/{prefix}_camera_url/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA camera URL sensor discovery")
+    stream = getattr(state, "stream_url", None)
+    if stream:
+        discoveries.append(("camera", f"{prefix}_camera", {
+            "name": "Stream",
+            "mjpeg_url": stream,
+        }))
+
+    for component, unique_id, payload in discoveries:
+        payload["unique_id"] = unique_id
+        payload["device"] = device
+        try:
+            _client.publish(f"homeassistant/{component}/{unique_id}/config", json.dumps(payload), retain=True)
+        except Exception:
+            log.exception(f"Failed to publish HA {component} discovery")

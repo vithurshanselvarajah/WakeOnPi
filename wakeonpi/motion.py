@@ -3,36 +3,32 @@ import threading
 import cv2
 import logging
 
-from . import state, config
+from . import state, config, mqtt, browser
 from .camera import picam2
 from .display import set_display
-from . import mqtt
 
 log = logging.getLogger("Motion")
+_motion_thread = None
+_motion_thread_lock = threading.Lock()
+
+
+def _set_display_if_needed(val):
+    if val != state.display_on:
+        set_display(val)
+        state.display_on = val
+        mqtt.publish_display(val)
+        if val:
+            override = getattr(state, "browser_override_url", None)
+            if override:
+                try:
+                    browser.show_url(override, force=True)
+                except Exception:
+                    log.exception("Error controlling browser")
+
 
 def motion_detection_loop():
     prev_frame = None
-
     state.manual_display_override = False
-
-    browser = None
-
-    def set_display_if_needed(val):
-        nonlocal browser
-        if val != state.display_on:
-            set_display(val)
-            state.display_on = val
-            mqtt.publish_display(val)
-            try:
-                if browser is None:
-                    import wakeonpi.browser as browser_mod
-                    browser = browser_mod
-                if val:
-                    override = getattr(state, "browser_override_url", None)
-                    if override:
-                        browser.show_url(override, force=True)
-            except Exception:
-                log.exception("Error while trying to control browser in set_display_if_needed")
 
     while True:
         try:
@@ -43,14 +39,13 @@ def motion_detection_loop():
             continue
 
         try:
-            gray = lores_frame[: lores_frame.shape[0] // 3, :].copy()
+            gray = lores_frame[:lores_frame.shape[0] // 3, :].copy()
             gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
             if prev_frame is not None and time.time() > state.ignore_motion_until:
                 delta = cv2.absdiff(prev_frame, gray)
                 _, thresh = cv2.threshold(delta, 25, 255, cv2.THRESH_BINARY)
                 motion_score = cv2.countNonZero(thresh)
-
                 is_motion = motion_score > config.MOTION_THRESHOLD
 
                 if state.manual_display_override:
@@ -61,49 +56,33 @@ def motion_detection_loop():
 
                 if is_motion:
                     state.last_motion_time = time.time()
-                    set_display_if_needed(True)
+                    _set_display_if_needed(True)
                     if not state.motion_event:
                         state.motion_event = True
                         mqtt.publish_motion(True)
-                        try:
-                            if browser is None:
-                                import wakeonpi.browser as browser_mod
-                                browser = browser_mod
-                            url = getattr(state, "browser_override_url", None) or config.current_settings().get("HASS_DASHBOARD_URL")
-                            if url:
-                                try:
-                                    current = None
-                                    try:
-                                        current = browser.get_current_url()
-                                    except Exception:
-                                        current = None
-
-                                    if current:
-                                        log.info("Browser already running (current URL: %s); not relaunching", current)
-                                        try:
-                                            mqtt.publish_browser_url(current)
-                                        except Exception:
-                                            log.exception("Failed to publish browser URL after detecting running browser")
-                                    else:
-                                        browser.show_url(url)
-                                        mqtt.publish_browser_url(url)
-                                except Exception:
-                                    log.exception("Failed to show URL on browser after motion detected")
-                        except Exception:
-                            log.exception("Error handling browser on motion event")
-
+                        url = getattr(state, "browser_override_url", None) or config.current_settings().get("HASS_DASHBOARD_URL")
+                        if url:
+                            try:
+                                current = browser.get_current_url()
+                                if current:
+                                    log.info("Browser already running (URL: %s)", current)
+                                    mqtt.publish_browser_url(current)
+                                else:
+                                    browser.show_url(url)
+                                    mqtt.publish_browser_url(url)
+                            except Exception:
+                                log.exception("Failed to show URL on browser")
                 elif time.time() - state.last_motion_time > config.INACTIVITY_TIMEOUT:
-                    set_display_if_needed(False)
+                    _set_display_if_needed(False)
                     if state.motion_event:
                         state.motion_event = False
                         mqtt.publish_motion(False)
 
             prev_frame = gray
         except Exception:
-            log.exception("Error during motion detection processing")
+            log.exception("Error during motion detection")
         time.sleep(config.CHECK_INTERVAL)
-_motion_thread = None
-_motion_thread_lock = threading.Lock()
+
 
 def start_motion_thread():
     global _motion_thread
