@@ -72,8 +72,21 @@ def motion_detection_loop():
                             url = getattr(state, "browser_override_url", None) or config.current_settings().get("HASS_DASHBOARD_URL")
                             if url:
                                 try:
-                                    browser.show_url(url)
-                                    mqtt.publish_browser_url(url)
+                                    current = None
+                                    try:
+                                        current = browser.get_current_url()
+                                    except Exception:
+                                        current = None
+
+                                    if current:
+                                        log.info("Browser already running (current URL: %s); not relaunching", current)
+                                        try:
+                                            mqtt.publish_browser_url(current)
+                                        except Exception:
+                                            log.exception("Failed to publish browser URL after detecting running browser")
+                                    else:
+                                        browser.show_url(url)
+                                        mqtt.publish_browser_url(url)
                                 except Exception:
                                     log.exception("Failed to show URL on browser after motion detected")
                         except Exception:
