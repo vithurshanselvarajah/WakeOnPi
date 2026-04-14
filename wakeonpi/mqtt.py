@@ -38,7 +38,7 @@ def _on_connect(client, userdata, flags, rc):
         import wakeonpi.browser as browser
         bro = getattr(browser, "get_current_url", lambda: None)()
         if bro:
-            publish_browser_current_page(bro)
+            publish_browser_url(bro)
     except Exception:
         log.exception("Failed to publish current stream URLs on MQTT connect")
 
@@ -95,7 +95,7 @@ def _on_message(client, userdata, msg):
             try:
                 import wakeonpi.browser as browser
                 browser.show_url(payload, force=True, one_shot=True)
-                publish_browser_current_page(payload)
+                publish_browser_url(payload)
             except Exception:
                 log.exception("MQTT handler failed to set browser URL")
         elif msg.topic == f"{prefix}/command/browser/refresh":
@@ -223,8 +223,8 @@ def publish_display(is_on):
 def publish_camera_stream_url(url):
     publish_state("camera/stream_url", url)
 
-def publish_browser_current_page(url):
-    publish_state("browser/current_page", url)
+def publish_browser_url(url):
+    publish_state("browser/url", url)
     
 def publish_command(path, payload):
     publish(f"command/{path}", payload)
@@ -302,16 +302,18 @@ def _publish_ha_discovery(prefix):
         log.exception("Failed to publish HA version sensor discovery")
 
     try:
-        browser_topic = f"{prefix}/state/browser/current_page"
+        browser_topic = f"{prefix}/state/browser/url"
+        cmd_topic = f"{prefix}/command/browser/url_set"
         payload = {
-            "name": f"Browser Page",
+            "name": f"Browser URL",
             "state_topic": browser_topic,
-            "unique_id": f"{prefix}_browser_page",
+            "command_topic": cmd_topic,
+            "unique_id": f"{prefix}_browser_url",
             "device": device,
         }
-        _client.publish(f"homeassistant/sensor/{prefix}_browser_page/config", json.dumps(payload), retain=True)
+        _client.publish(f"homeassistant/text/{prefix}_browser_url/config", json.dumps(payload), retain=True)
     except Exception:
-        log.exception("Failed to publish HA browser page sensor discovery")
+        log.exception("Failed to publish HA browser URL discovery")
 
     try:
         camurl_topic = f"{prefix}/state/camera/stream_url"
@@ -336,19 +338,6 @@ def _publish_ha_discovery(prefix):
         _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
     except Exception:
         log.exception("Failed to publish HA browser refresh command discovery")
-
-    try:
-        topic = f"{prefix}/command/browser/url_set"
-        payload = {
-            "name": f"Browser Set URL",
-            "command_topic": topic,
-            "payload_press": "",
-            "unique_id": f"{prefix}_browser_set_url",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/text/{prefix}_browser_set_url/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA browser set url command discovery")
 
     try:
         topic = f"{prefix}/command/camera/refresh"

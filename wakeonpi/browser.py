@@ -127,7 +127,7 @@ class _BrowserController:
                 self._restart_process(url)
                 try:
                     import wakeonpi.mqtt as mqtt
-                    mqtt.publish_browser_current_page(url)
+                    mqtt.publish_browser_url(url)
                 except Exception:
                     log.exception("Failed to publish browser stream URL after show_url")
             finally:
@@ -174,7 +174,7 @@ class _BrowserController:
             raise RuntimeError("Failed to start chromium process")
         try:
             import wakeonpi.mqtt as mqtt
-            mqtt.publish_browser_current_page(url)
+            mqtt.publish_browser_url(url)
         except Exception:
             log.exception("Failed to publish browser stream URL after chromium start")
 

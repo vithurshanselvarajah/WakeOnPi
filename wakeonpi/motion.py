@@ -76,7 +76,7 @@ def motion_detection_loop():
                             if url:
                                 try:
                                     browser.show_url(url)
-                                    mqtt.publish_browser_current_page(url)
+                                    mqtt.publish_browser_url(url)
                                 except Exception:
                                     log.exception("Failed to show URL on browser after motion detected")
                         except Exception:
