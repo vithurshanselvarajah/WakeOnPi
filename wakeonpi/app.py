@@ -114,7 +114,7 @@ def settings():
         proc = getattr(ctrl, "_proc", None)
         browser_running = proc is not None and proc.poll() is None
         status['browser_running'] = browser_running
-        status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)()
+        status['browser_current_url'] = getattr(ctrl, "current_url", None) or getattr(browser, "get_current_url", lambda: None)() or s.get("HASS_DASHBOARD_URL")
     except Exception:
         logging.getLogger("App").exception("Failed to read browser status")
 
