@@ -350,6 +350,18 @@ def _publish_ha_discovery(prefix):
         log.exception("Failed to publish HA browser URL discovery")
 
     try:
+        refresh_cmd = f"{prefix}/command/browser/refresh"
+        payload = {
+            "name": f"Browser Refresh",
+            "command_topic": refresh_cmd,
+            "unique_id": f"{prefix}_browser_refresh",
+            "device": device,
+        }
+        _client.publish(f"homeassistant/button/{prefix}_browser_refresh/config", json.dumps(payload), retain=True)
+    except Exception:
+        log.exception("Failed to publish HA browser refresh discovery")
+
+    try:
         topic = f"{prefix}/state/recording/active"
         payload = {
             "name": f"Recording Active",
