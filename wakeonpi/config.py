@@ -15,6 +15,7 @@ DEFAULTS = {
     "HASS_DASHBOARD_URL": "https://github.com/vithurshanselvarajah/WakeOnPi",
     "HTTP_USERNAME": "wakeonpi",
     "HTTP_PASSWORD": "password123",
+    "BACKLIGHT_PATH": "/sys/class/backlight/10-0045/bl_power",
 }
 
 MOTION_THRESHOLD = 1500
@@ -50,11 +51,12 @@ MQTT_PASSWORD = _settings["MQTT_PASSWORD"]
 HASS_DASHBOARD_URL = _settings.get("HASS_DASHBOARD_URL")
 HTTP_USERNAME = _settings.get("HTTP_USERNAME")
 HTTP_PASSWORD = _settings.get("HTTP_PASSWORD")
+BACKLIGHT_PATH = _settings.get("BACKLIGHT_PATH")
 
 def update_settings(**kwargs):
     global MOTION_THRESHOLD, INACTIVITY_TIMEOUT, CHECK_INTERVAL
     global MQTT_HOST, MQTT_PORT, MQTT_TOPIC_PREFIX, MQTT_USERNAME, MQTT_PASSWORD
-    global HASS_DASHBOARD_URL, HTTP_USERNAME, HTTP_PASSWORD
+    global HASS_DASHBOARD_URL, HTTP_USERNAME, HTTP_PASSWORD, BACKLIGHT_PATH
 
     for k, v in kwargs.items():
         if k in _settings:
@@ -74,6 +76,7 @@ def update_settings(**kwargs):
     HASS_DASHBOARD_URL = _settings.get("HASS_DASHBOARD_URL")
     HTTP_USERNAME = _settings.get("HTTP_USERNAME")
     HTTP_PASSWORD = _settings.get("HTTP_PASSWORD")
+    BACKLIGHT_PATH = _settings.get("BACKLIGHT_PATH")
 
     return _settings.copy()
 

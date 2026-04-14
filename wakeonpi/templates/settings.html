@@ -64,6 +64,10 @@
         <label>HASS_DASHBOARD_URL</label>
         <input name="HASS_DASHBOARD_URL" type="text" value="{{ s.get('HASS_DASHBOARD_URL') or '' }}"/>
 
+        <label>BACKLIGHT_PATH</label>
+        <input name="BACKLIGHT_PATH" type="text" value="{{ s.get('BACKLIGHT_PATH') or '' }}"/>
+        <small>Current backlight file: {{ status.get('backlight_path') or 'N/A' }} - Writable: {{ 'Yes' if status.get('backlight_writable') else 'No' }}</small>
+
         <button type="submit">Save settings</button>
       </form>
       <p style="margin-top:12px"><small>Sensitive values like passwords are not exposed. To keep an existing password, leave the password field unchanged.</small></p>
@@ -83,6 +87,14 @@
         <dt>Motion Active</dt><dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
         <dt>Display On</dt><dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
         <dt>Stream URL</dt><dd>{{ status.get('stream_url') or 'N/A' }}</dd>
+        <dt>Backlight Test</dt>
+        <dd>
+          {% if status.get('last_backlight_test') %}
+            Path: {{ status['last_backlight_test']['path'] }} - Writable: {{ 'Yes' if status['last_backlight_test']['writable'] else 'No' }}
+          {% else %}
+            N/A
+          {% endif %}
+        </dd>
         <dt>Services</dt><dd><button onclick="fetch('/settings/restart', {method:'POST'}).then(()=>location.reload())">Restart Services</button></dd>
         <dt>Clients Connected</dt><dd>{{ status.get('clients_connected') or 0 }}</dd>
         <dt>Version</dt><dd>{{ status.get('version') or 'N/A' }}</dd>
