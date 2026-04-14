@@ -39,6 +39,11 @@ def _on_connect(client, userdata, flags, rc):
         bro = getattr(browser, "get_current_url", lambda: None)()
         if bro:
             publish_browser_url(bro)
+        else:
+            # fallback to last known browser URL stored in state
+            bro_state = getattr(state, 'browser_url', None)
+            if bro_state:
+                publish_browser_url(bro_state)
     except Exception:
         log.exception("Failed to publish current stream URLs on MQTT connect")
 
@@ -224,6 +229,14 @@ def publish_camera_stream_url(url):
     publish_state("camera/stream_url", url)
 
 def publish_browser_url(url):
+    try:
+        # keep last known browser URL in shared state for other components
+        try:
+            state.browser_url = url
+        except Exception:
+            pass
+    except Exception:
+        pass
     publish_state("browser/url", url)
     
 def publish_command(path, payload):

@@ -105,14 +105,23 @@ class _BrowserController:
             try:
                 if self._proc and self._proc.poll() is None:
                     url = self._get_browser_url_from_cdp()
-                    if url and url != self.current_url and not url.startswith("about:"):
-                        log.info(f"Browser navigated to: {url}")
-                        self.current_url = url
+                    if url and not url.startswith("about:"):
+                        # publish if the URL is different from last published URL in state
+                        last_published = None
                         try:
-                            import wakeonpi.mqtt as mqtt
-                            mqtt.publish_browser_url(url)
+                            from . import state as _state
+                            last_published = getattr(_state, 'browser_url', None)
                         except Exception:
-                            log.exception("Failed to publish browser URL after navigation")
+                            last_published = None
+
+                        if url != last_published:
+                            log.info(f"Browser navigated to: {url}")
+                            self.current_url = url
+                            try:
+                                import wakeonpi.mqtt as mqtt
+                                mqtt.publish_browser_url(url)
+                            except Exception:
+                                log.exception("Failed to publish browser URL after navigation")
             except Exception:
                 log.exception("Error in URL monitor loop")
             time.sleep(2)
