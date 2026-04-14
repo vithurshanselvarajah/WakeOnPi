@@ -69,7 +69,15 @@ def motion_detection_loop():
                             if browser is None:
                                 import wakeonpi.browser as browser_mod
                                 browser = browser_mod
-                                mqtt.publish_browser_url(url)
+                            url = getattr(state, "browser_override_url", None) or config.current_settings().get("HASS_DASHBOARD_URL")
+                            if url:
+                                try:
+                                    browser.show_url(url)
+                                    mqtt.publish_browser_url(url)
+                                except Exception:
+                                    log.exception("Failed to show URL on browser after motion detected")
+                        except Exception:
+                            log.exception("Error handling browser on motion event")
 
                 elif time.time() - state.last_motion_time > config.INACTIVITY_TIMEOUT:
                     set_display_if_needed(False)
