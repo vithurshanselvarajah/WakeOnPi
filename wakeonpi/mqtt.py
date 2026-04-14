@@ -45,7 +45,6 @@ def _on_connect(client, userdata, flags, rc):
         try:
             import wakeonpi.recorder as recorder
             publish_recording_state(recorder.is_recording())
-            publish_recording_file(recorder.get_current_file())
         except Exception:
             pass
     except Exception:
@@ -126,12 +125,10 @@ def _on_message(client, userdata, msg):
                 if recorder.is_recording():
                     ok, res = recorder.stop_recording()
                     publish_recording_state(False)
-                    publish_recording_file(None)
                 else:
                     ok, res = recorder.start_recording(config.RECORDINGS_ROOT)
                     if ok:
                         publish_recording_state(True)
-                        publish_recording_file(res)
                 # respond by republishing status
             except Exception:
                 log.exception("MQTT handler failed to toggle recording")
@@ -229,6 +226,7 @@ def publish(topic_suffix, payload):
     except Exception:
         log.exception(f"Failed to publish MQTT message: {topic_suffix} -> {payload}")
 
+
 def publish_state(path, payload):
     try:
         global _last_version
@@ -238,14 +236,18 @@ def publish_state(path, payload):
         pass
     publish(f"state/{path}", payload)
 
+
 def publish_motion(is_motion):
     publish_state("motion", "ON" if is_motion else "OFF")
+
 
 def publish_display(is_on):
     publish_state("screen", "ON" if is_on else "OFF")
 
+
 def publish_camera_stream_url(url):
     publish_state("camera/stream_url", url)
+
 
 def publish_browser_url(url):
     try:
@@ -257,11 +259,9 @@ def publish_browser_url(url):
         pass
     publish_state("browser/url", url)
 
+
 def publish_recording_state(is_on):
     publish_state("recording/active", "ON" if is_on else "OFF")
-
-def publish_recording_file(path):
-    publish_state("recording/file", path or "")
 
 
 def get_system_version():
@@ -362,28 +362,21 @@ def _publish_ha_discovery(prefix):
         log.exception("Failed to publish HA recording active discovery")
 
     try:
-        topic = f"{prefix}/state/recording/file"
+        # expose recording as a switch (toggle) in Home Assistant
+        rec_cmd = f"{prefix}/command/recording/toggle"
+        rec_state = f"{prefix}/state/recording/active"
         payload = {
-            "name": f"Recording File",
-            "state_topic": topic,
-            "unique_id": f"{prefix}_recording_file",
+            "name": f"Recording",
+            "command_topic": rec_cmd,
+            "state_topic": rec_state,
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "unique_id": f"{prefix}_recording",
             "device": device,
         }
-        _client.publish(f"homeassistant/sensor/{prefix}_recording_file/config", json.dumps(payload), retain=True)
+        _client.publish(f"homeassistant/switch/{prefix}_recording/config", json.dumps(payload), retain=True)
     except Exception:
-        log.exception("Failed to publish HA recording file discovery")
-
-    try:
-        topic = f"{prefix}/command/recording/toggle"
-        payload = {
-            "name": f"Recording Toggle",
-            "command_topic": topic,
-            "unique_id": f"{prefix}_recording_toggle",
-            "device": device,
-        }
-        _client.publish(f"homeassistant/button/{prefix}_recording_toggle/config", json.dumps(payload), retain=True)
-    except Exception:
-        log.exception("Failed to publish HA recording toggle discovery")
+        log.exception("Failed to publish HA recording switch discovery")
 
     try:
         camurl_topic = f"{prefix}/state/camera/stream_url"

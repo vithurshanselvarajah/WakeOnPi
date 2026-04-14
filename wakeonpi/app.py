@@ -102,6 +102,18 @@ def settings():
                 rr = updates.get('RECORDINGS_ROOT') or config.RECORDINGS_ROOT
                 from pathlib import Path
                 Path(rr).mkdir(parents=True, exist_ok=True)
+                # test writable
+                try:
+                    testfile = Path(rr) / '.writetest'
+                    with testfile.open('w') as f:
+                        f.write('ok')
+                    try:
+                        testfile.unlink()
+                    except Exception:
+                        pass
+                    state.temp_recordings_test = {'path': rr, 'writable': True}
+                except Exception:
+                    state.temp_recordings_test = {'path': rr, 'writable': False}
             except Exception:
                 pass
             # if BACKLIGHT_PATH changed, attempt to write and record status
@@ -159,6 +171,25 @@ def settings():
     except Exception:
         status['recording_active'] = False
         status['recording_file'] = None
+
+    # expose last test results for backlight and recordings to template
+    try:
+        status['last_backlight_test'] = getattr(state, 'temp_backlight_test', None)
+        status['backlight_path'] = status['last_backlight_test']['path'] if status['last_backlight_test'] else s.get('BACKLIGHT_PATH')
+        status['backlight_writable'] = status['last_backlight_test']['writable'] if status['last_backlight_test'] else None
+    except Exception:
+        status['last_backlight_test'] = None
+        status['backlight_path'] = s.get('BACKLIGHT_PATH')
+        status['backlight_writable'] = None
+
+    try:
+        status['last_recordings_test'] = getattr(state, 'temp_recordings_test', None)
+        status['recordings_root'] = status['last_recordings_test']['path'] if status['last_recordings_test'] else s.get('RECORDINGS_ROOT')
+        status['recordings_writable'] = status['last_recordings_test']['writable'] if status['last_recordings_test'] else None
+    except Exception:
+        status['last_recordings_test'] = None
+        status['recordings_root'] = s.get('RECORDINGS_ROOT')
+        status['recordings_writable'] = None
 
     return render_template('settings.html', s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
 
