@@ -234,14 +234,21 @@ class _BrowserController:
         except Exception:
             log.exception("Failed to publish browser stream URL after chromium start")
         
-        # Start URL monitor to track navigation
         self._start_url_monitor()
 
     def refresh(self):
         def _do():
-            if not self.current_url:
+            # Reload to default dashboard URL if configured, otherwise fall back to current_url
+            try:
+                import wakeonpi.config as config
+                default = config.current_settings().get("HASS_DASHBOARD_URL")
+            except Exception:
+                default = None
+
+            url = default or self.current_url
+            if not url:
                 return
-            self._restart_process(self.current_url)
+            self._restart_process(url)
 
         with _lock:
             if not self._started:
