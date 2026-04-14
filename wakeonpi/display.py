@@ -1,6 +1,10 @@
 def set_display(state):
     try:
-        with open("/sys/class/backlight/10-0045/bl_power", "w") as f:
-            f.write("0" if state else "1")
-    except Exception as e:
-        print(f"Display error: {e}")
+        from . import config
+        import logging
+
+        path = getattr(config, 'BACKLIGHT_PATH', '/sys/class/backlight/10-0045/bl_power')
+        with open(path, 'w') as f:
+            f.write('0' if state else '1')
+    except Exception:
+        logging.getLogger('Display').exception('Failed to set backlight')
