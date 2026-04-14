@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>WakeOnPi Settings</title>
     <style>
+      *{box-sizing:border-box}
       body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;background:#f7f7f7;color:#111}
-      .card{background:#fff;border-radius:8px;padding:20px;max-width:760px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+      .card{background:#fff;border-radius:8px;padding:24px;max-width:760px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.08)}
       label{display:block;margin-top:12px;font-weight:600}
-      input[type=text],input[type=number],input[type=password]{width:100%;padding:8px;margin-top:6px;border:1px solid #ddd;border-radius:6px}
+      input[type=text],input[type=number],input[type=password]{width:100%;padding:10px 12px;margin-top:6px;border:1px solid #ddd;border-radius:6px}
       button{margin-top:16px;padding:10px 14px;border-radius:6px;border:0;background:#0078d4;color:#fff;font-weight:600}
       small{color:#666}
       .row{display:flex;gap:12px}
-      .col{flex:1}
+      .col{flex:1;min-width:0}
       dl{margin:0}
       dt{font-weight:600}
       dd{margin-left:0;margin-bottom:12px}
