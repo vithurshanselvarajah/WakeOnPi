@@ -139,6 +139,27 @@ class _BrowserController:
             raise val
         return val
 
+    def _execute_cdp_js(self, js_code):
+        try:
+            import json as _json
+            ws_url = None
+            req = urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=2)
+            data = _json.loads(req.read().decode())
+            for tab in data:
+                if tab.get("type") == "page":
+                    ws_url = tab.get("webSocketDebuggerUrl")
+                    break
+            if not ws_url:
+                return
+            import websocket
+            ws = websocket.create_connection(ws_url, timeout=2)
+            msg = _json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {"expression": js_code}})
+            ws.send(msg)
+            ws.recv()
+            ws.close()
+        except Exception:
+            pass
+
     def _restart_process(self, url):
         if self._proc and self._proc.poll() is None:
             try:

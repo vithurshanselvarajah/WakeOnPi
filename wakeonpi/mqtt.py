@@ -35,7 +35,8 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
-    client.subscribe(f"{prefix}/command/overlay/notify")
+    client.subscribe(f"{prefix}/command/display/notify")
+    client.subscribe(f"{prefix}/command/display/notify/clear")
 
     try:
         ip = state.get_system_ip()
@@ -157,13 +158,23 @@ def _on_message(client, userdata, msg):
             except Exception:
                 log.exception("Failed to set brightness")
 
-        elif msg.topic == f"{prefix}/command/overlay/notify":
+        elif msg.topic == f"{prefix}/command/display/notify":
             try:
                 from . import overlay
                 data = json.loads(payload) if payload.startswith("{") else {"message": payload}
-                overlay.set_notification(data.get("message", payload), data.get("duration", 5))
+                message = data.get("message", payload)
+                overlay.set_notification(message)
+                publish_notification(message)
             except Exception:
-                log.exception("Failed to set overlay notification")
+                log.exception("Failed to set display notification")
+
+        elif msg.topic == f"{prefix}/command/display/notify/clear":
+            try:
+                from . import overlay
+                overlay.clear_notification()
+                publish_notification("")
+            except Exception:
+                log.exception("Failed to clear display notification")
 
     except Exception:
         log.exception("Error in MQTT message handler")
@@ -303,6 +314,10 @@ def publish_brightness(level):
     publish_state("screen/brightness", str(level))
 
 
+def publish_notification(message):
+    publish_state("display/notification", message or "")
+
+
 def publish_storage(free_gb, total_gb, percent):
     publish_state("storage/free_gb", str(free_gb))
     publish_state("storage/total_gb", str(total_gb))
@@ -325,12 +340,14 @@ def _publish_ha_discovery(prefix):
         return
 
     version = _get_version()
+    settings_url = f"http://{state.get_system_ip()}:{config.SERVICE_PORT}/settings"
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
-        "manufacturer": "VithuselServices",
+        "manufacturer": "WakeOnPi",
         "model": "Raspberry Pi 5",
         "sw_version": str(version),
+        "configuration_url": settings_url,
     }
 
     discoveries = [
@@ -429,15 +446,16 @@ def _publish_ha_discovery(prefix):
             "unit_of_measurement": "%",
             "icon": "mdi:chart-pie",
         }),
-        ("text", f"{prefix}_overlay_notify", {
-            "name": "Overlay Notification",
-            "command_topic": f"{prefix}/command/overlay/notify",
+        ("text", f"{prefix}_display_notify", {
+            "name": "Display Notification",
+            "command_topic": f"{prefix}/command/display/notify",
+            "state_topic": f"{prefix}/state/display/notification",
             "icon": "mdi:message-alert",
         }),
-        ("sensor", f"{prefix}_clients", {
-            "name": "Connected Clients",
-            "state_topic": f"{prefix}/state/clients_connected",
-            "icon": "mdi:account-multiple",
+        ("button", f"{prefix}_clear_notify", {
+            "name": "Clear Notification",
+            "command_topic": f"{prefix}/command/display/notify/clear",
+            "icon": "mdi:message-off",
         }),
     ]
 

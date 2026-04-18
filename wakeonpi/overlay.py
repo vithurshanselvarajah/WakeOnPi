@@ -1,89 +1,99 @@
 import time
-import cv2
-import numpy as np
+import threading
+import logging
 from datetime import datetime
-from . import state, config, system
+from . import state
 
-def set_notification(message, duration=5):
-    with state.overlay_lock:
-        state.overlay_message = message
-        state.overlay_expires = time.time() + duration
+log = logging.getLogger("Overlay")
+
+_notification_message = None
+_notification_persistent = True
+_overlay_lock = threading.Lock()
+_display_thread = None
+_stop_event = threading.Event()
+
+
+def set_notification(message, persistent=True):
+    global _notification_message, _notification_persistent
+    with _overlay_lock:
+        _notification_message = message
+        _notification_persistent = persistent
+        log.info(f"Display notification set: {message}")
 
 
 def clear_notification():
-    with state.overlay_lock:
-        state.overlay_message = None
-        state.overlay_expires = 0
+    global _notification_message
+    with _overlay_lock:
+        _notification_message = None
+        log.info("Display notification cleared")
 
 
 def get_notification():
-    with state.overlay_lock:
-        if state.overlay_message and time.time() < state.overlay_expires:
-            return state.overlay_message
-        return None
+    with _overlay_lock:
+        return _notification_message
 
 
-def draw_overlay(frame):
-    if not config.OVERLAY_ENABLED:
-        return frame
-    
-    h, w = frame.shape[:2]
-    overlay = frame.copy()
-    position = config.OVERLAY_POSITION or "top-right"
-    
-    lines = []
-    
-    if config.OVERLAY_SHOW_TIME:
-        lines.append(datetime.now().strftime("%H:%M:%S"))
-    
-    if config.OVERLAY_SHOW_STATS:
-        stats = system.get_stats()
-        lines.append(f"CPU: {stats['cpu_usage']}%  {stats['cpu_temp']}°C")
-        lines.append(f"MEM: {stats['memory_percent']}%")
-        lines.append(f"DISK: {stats['storage_free_gb']}GB free")
-    
-    notification = get_notification()
-    if notification:
-        lines.append(notification)
-    
-    if state.motion_event:
-        lines.append("● MOTION")
-    
-    if not lines:
-        return frame
-    
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.5
-    thickness = 1
-    padding = 8
-    line_height = 20
-    
-    max_width = 0
-    for line in lines:
-        (tw, th), _ = cv2.getTextSize(line, font, font_scale, thickness)
-        max_width = max(max_width, tw)
-    
-    box_w = max_width + padding * 2
-    box_h = len(lines) * line_height + padding * 2
-    
-    if "top" in position:
-        y_start = 10
-    else:
-        y_start = h - box_h - 10
-    
-    if "right" in position:
-        x_start = w - box_w - 10
-    else:
-        x_start = 10
-    
-    cv2.rectangle(overlay, (x_start, y_start), (x_start + box_w, y_start + box_h), (0, 0, 0), -1)
-    frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
-    
-    for i, line in enumerate(lines):
-        y = y_start + padding + (i + 1) * line_height - 5
-        color = (0, 255, 0) if "MOTION" in line else (255, 255, 255)
-        if notification and line == notification:
-            color = (0, 200, 255)
-        cv2.putText(frame, line, (x_start + padding, y), font, font_scale, color, thickness, cv2.LINE_AA)
-    
-    return frame
+def get_current_time():
+    return datetime.now().strftime("%H:%M")
+
+
+def get_display_info():
+    with _overlay_lock:
+        return {
+            "time": get_current_time(),
+            "notification": _notification_message,
+            "has_notification": _notification_message is not None
+        }
+
+
+def _update_browser_overlay():
+    try:
+        from . import browser
+        info = get_display_info()
+        js_code = f'''
+            (function() {{
+                let overlay = document.getElementById('wakeonpi-overlay');
+                if (!overlay) {{
+                    overlay = document.createElement('div');
+                    overlay.id = 'wakeonpi-overlay';
+                    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:8px 16px;background:rgba(0,0,0,0.7);color:white;font-family:sans-serif;z-index:999999;display:flex;justify-content:space-between;align-items:center;font-size:18px;';
+                    document.body.appendChild(overlay);
+                }}
+                let timeStr = '{info["time"]}';
+                let notif = {repr(info["notification"]) if info["notification"] else 'null'};
+                overlay.innerHTML = '<span style="font-weight:bold;">' + timeStr + '</span>' + 
+                    (notif ? '<span style="background:#f59e0b;padding:4px 12px;border-radius:4px;margin-left:16px;">' + notif + '</span>' : '');
+            }})();
+        '''
+        browser._get_controller()._run_on_worker(
+            lambda: browser._get_controller()._execute_cdp_js(js_code),
+            wait=False
+        )
+    except Exception:
+        pass
+
+
+def start_overlay_service():
+    global _display_thread
+    if _display_thread and _display_thread.is_alive():
+        return
+    _stop_event.clear()
+    _display_thread = threading.Thread(target=_overlay_loop, daemon=True)
+    _display_thread.start()
+    log.info("Display overlay service started")
+
+
+def stop_overlay_service():
+    _stop_event.set()
+    if _display_thread:
+        _display_thread.join(timeout=2)
+
+
+def _overlay_loop():
+    while not _stop_event.is_set():
+        try:
+            _update_browser_overlay()
+        except Exception:
+            pass
+        _stop_event.wait(30)
+

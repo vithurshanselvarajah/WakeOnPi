@@ -23,10 +23,6 @@ DEFAULTS = {
     "STREAM_RESOLUTION": "854x480",
     "STREAM_FPS": 10,
     "STREAM_QUALITY": 75,
-    "OVERLAY_ENABLED": True,
-    "OVERLAY_SHOW_TIME": True,
-    "OVERLAY_SHOW_STATS": False,
-    "OVERLAY_POSITION": "top-right",
     "SERVICE_PORT": 5000,
     "DEBUG_MODE": False,
 }
@@ -71,10 +67,6 @@ RECORDINGS_ROOT = _settings.get("RECORDINGS_ROOT")
 STREAM_RESOLUTION = _settings.get("STREAM_RESOLUTION")
 STREAM_FPS = _settings.get("STREAM_FPS")
 STREAM_QUALITY = _settings.get("STREAM_QUALITY")
-OVERLAY_ENABLED = _settings.get("OVERLAY_ENABLED")
-OVERLAY_SHOW_TIME = _settings.get("OVERLAY_SHOW_TIME")
-OVERLAY_SHOW_STATS = _settings.get("OVERLAY_SHOW_STATS")
-OVERLAY_POSITION = _settings.get("OVERLAY_POSITION")
 SERVICE_PORT = _settings.get("SERVICE_PORT", 5000)
 DEBUG_MODE = _settings.get("DEBUG_MODE", False)
 
@@ -89,7 +81,6 @@ def update_settings(**kwargs):
     global HASS_DASHBOARD_URL, HTTP_USERNAME, HTTP_PASSWORD, BACKLIGHT_PATH, RECORDINGS_ROOT
     global BRIGHTNESS_PATH, BRIGHTNESS_MAX_PATH
     global STREAM_RESOLUTION, STREAM_FPS, STREAM_QUALITY
-    global OVERLAY_ENABLED, OVERLAY_SHOW_TIME, OVERLAY_SHOW_STATS, OVERLAY_POSITION
     global SERVICE_PORT, DEBUG_MODE
 
     for k, v in kwargs.items():
@@ -115,10 +106,6 @@ def update_settings(**kwargs):
     STREAM_RESOLUTION = _settings.get("STREAM_RESOLUTION")
     STREAM_FPS = _settings.get("STREAM_FPS")
     STREAM_QUALITY = _settings.get("STREAM_QUALITY")
-    OVERLAY_ENABLED = _settings.get("OVERLAY_ENABLED")
-    OVERLAY_SHOW_TIME = _settings.get("OVERLAY_SHOW_TIME")
-    OVERLAY_SHOW_STATS = _settings.get("OVERLAY_SHOW_STATS")
-    OVERLAY_POSITION = _settings.get("OVERLAY_POSITION")
     SERVICE_PORT = _settings.get("SERVICE_PORT", 5000)
     DEBUG_MODE = _settings.get("DEBUG_MODE", False)
 
