@@ -4,6 +4,8 @@ from pathlib import Path
 import cv2
 from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
 from . import state, config, mqtt, browser, recorder
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed
 from .auth import requires_auth

@@ -7,7 +7,6 @@ import subprocess
 import json
 import urllib.request
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("BrowserController")
 
 _DEFAULT_CHROMIUM_PATHS = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium-browser-stable"]
