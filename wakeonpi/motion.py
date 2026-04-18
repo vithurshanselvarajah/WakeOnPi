@@ -43,6 +43,9 @@ def _handle_motion_recording(is_motion):
         return
     if not settings.get("RECORDING_ENABLED", True):
         return
+    # Recording requires camera to be enabled
+    if not settings.get("CAMERA_ENABLED", True):
+        return
     
     try:
         from . import recorder
@@ -122,10 +125,8 @@ def motion_detection_loop():
     _apply_screen_control_mode()
 
     while True:
-        # Check if camera is enabled
-        if not config.current_settings().get("CAMERA_ENABLED", True):
-            time.sleep(1)
-            continue
+        # Motion detection always runs - it controls display and publishes motion state
+        # Only recording/streaming are affected by CAMERA_ENABLED setting
 
         try:
             lores_frame = picam2.capture_array("lores")
