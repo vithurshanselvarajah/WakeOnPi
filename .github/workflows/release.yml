@@ -35,7 +35,7 @@ jobs:
             CURRENT_PKGS=$(echo "$CURRENT_REQS" | sed 's/[=<>!].*//' | sort -u)
             MAIN_PKGS=$(echo "$MAIN_REQS" | sed 's/[=<>!].*//' | sort -u)
             
-            NEW_PKGS=$(comm -23 <(echo "$CURRENT_PKGS") <(echo "$MAIN_PKGS"))
+            NEW_PKGS=$(comm -23 <(echo "$CURRENT_PKGS") <(echo "$MAIN_PKGS") | tr '\n' ',' | sed 's/,$//')
             if [ -n "$NEW_PKGS" ]; then
               echo "breaking=true" >> $GITHUB_OUTPUT
               echo "new_packages=$NEW_PKGS" >> $GITHUB_OUTPUT
