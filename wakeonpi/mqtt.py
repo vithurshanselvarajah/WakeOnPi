@@ -84,6 +84,18 @@ def _get_version():
     return getattr(config, "VERSION", "0.0.1")
 
 
+def _get_pi_model():
+    """Detect Raspberry Pi model from /proc/device-tree/model."""
+    try:
+        model_path = Path("/proc/device-tree/model")
+        if model_path.exists():
+            model = model_path.read_text().strip().rstrip('\x00')
+            return model
+    except Exception:
+        pass
+    return "Raspberry Pi"
+
+
 def _on_disconnect(client, userdata, rc):
     global _connected
     _connected = False
@@ -352,8 +364,8 @@ def _publish_ha_discovery(prefix):
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
-        "manufacturer": "VithuselServices",
-        "model": "Raspberry Pi 5",
+        "manufacturer": "Raspberry Pi",
+        "model": _get_pi_model(),
         "sw_version": str(version),
         "configuration_url": f"http://{ip}:{port}/settings",
     }
