@@ -111,8 +111,13 @@ jobs:
             git pull origin staging
           fi
           
-          # Merge the source branch
-          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}"
+          # Merge the source branch, accepting theirs for conflicts (develop takes priority)
+          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}" -X theirs || {
+            # If merge still fails, force resolve conflicts by taking develop's version
+            git checkout --theirs .
+            git add .
+            git commit -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}"
+          }
           git push origin staging
 
       - name: Update version in staging
