@@ -138,6 +138,15 @@ def _on_message(client, userdata, msg):
 
         elif msg.topic == f"{prefix}/command/recording/toggle":
             try:
+                # Check if camera and recording are enabled
+                settings = config.current_settings()
+                if not settings.get("CAMERA_ENABLED", True):
+                    log.warning("Recording toggle ignored: camera is disabled")
+                    return
+                if not settings.get("RECORDING_ENABLED", True):
+                    log.warning("Recording toggle ignored: recording is disabled")
+                    return
+                    
                 from . import recorder
                 if recorder.is_recording():
                     recorder.stop_recording()
@@ -490,14 +499,6 @@ def _publish_ha_discovery(prefix):
             "unit_of_measurement": "%",
             "icon": "mdi:chart-pie",
         }),
-        ("update", f"{prefix}_update", {
-            "name": "Firmware Update",
-            "state_topic": f"{prefix}/state/update/state",
-            "command_topic": f"{prefix}/command/update/install",
-            "payload_install": "install",
-            "value_template": "{{ value_json }}",
-            "icon": "mdi:update",
-        }),
         ("binary_sensor", f"{prefix}_update_available", {
             "name": "Update Available",
             "device_class": "update",
@@ -505,13 +506,6 @@ def _publish_ha_discovery(prefix):
             "payload_on": "ON",
             "payload_off": "OFF",
             "icon": "mdi:package-up",
-        }),
-        ("binary_sensor", f"{prefix}_update_breaking", {
-            "name": "Breaking Update",
-            "state_topic": f"{prefix}/state/update/breaking",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:alert-circle-outline",
         }),
     ]
 

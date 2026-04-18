@@ -526,7 +526,7 @@
       </div>
     </div>
 
-    <div class="card collapsed" id="stream-settings-card" data-feature="camera">
+    <div class="card collapsed" id="stream-settings-card">
       <div class="card-header" onclick="toggleCard(this)">
         <h2><span class="icon">🎬</span> Stream Settings</h2>
         <span class="chevron">▼</span>
@@ -536,35 +536,37 @@
           <label>Enable Camera</label>
           <div class="toggle-btn" id="camera-toggle" onclick="toggleSetting('CAMERA_ENABLED')"></div>
         </div>
-        <div class="form-group" style="margin-top:12px">
-          <label>Resolution</label>
-          <select id="stream-resolution" onchange="updateSetting('STREAM_RESOLUTION', this.value)">
-            <option value="640x360">640x360 (Low)</option>
-            <option value="854x480">854x480 (SD)</option>
-            <option value="1280x720">1280x720 (HD)</option>
-            <option value="1920x1080">1920x1080 (Full HD)</option>
-          </select>
-        </div>
-        <div class="row">
-          <div class="form-group">
-            <label>FPS</label>
-            <select id="stream-fps" onchange="updateSetting('STREAM_FPS', parseInt(this.value))">
-              <option value="5">5 FPS</option>
-              <option value="10">10 FPS</option>
-              <option value="15">15 FPS</option>
-              <option value="20">20 FPS</option>
-              <option value="30">30 FPS</option>
+        <div id="stream-settings-content">
+          <div class="form-group" style="margin-top:12px">
+            <label>Resolution</label>
+            <select id="stream-resolution" onchange="updateSetting('STREAM_RESOLUTION', this.value)">
+              <option value="640x360">640x360 (Low)</option>
+              <option value="854x480">854x480 (SD)</option>
+              <option value="1280x720">1280x720 (HD)</option>
+              <option value="1920x1080">1920x1080 (Full HD)</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Quality</label>
-            <select id="stream-quality" onchange="updateSetting('STREAM_QUALITY', parseInt(this.value))">
-              <option value="50">50% (Low)</option>
-              <option value="65">65% (Medium)</option>
-              <option value="75">75% (Good)</option>
-              <option value="85">85% (High)</option>
-              <option value="95">95% (Best)</option>
-            </select>
+          <div class="row">
+            <div class="form-group">
+              <label>FPS</label>
+              <select id="stream-fps" onchange="updateSetting('STREAM_FPS', parseInt(this.value))">
+                <option value="5">5 FPS</option>
+                <option value="10">10 FPS</option>
+                <option value="15">15 FPS</option>
+                <option value="20">20 FPS</option>
+                <option value="30">30 FPS</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Quality</label>
+              <select id="stream-quality" onchange="updateSetting('STREAM_QUALITY', parseInt(this.value))">
+                <option value="50">50% (Low)</option>
+                <option value="65">65% (Medium)</option>
+                <option value="75">75% (Good)</option>
+                <option value="85">85% (High)</option>
+                <option value="95">95% (Best)</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -738,6 +740,11 @@
           <label>Debug Mode</label>
           <div class="toggle-btn" id="debug-toggle" onclick="toggleSetting('DEBUG_MODE')"></div>
         </div>
+        <div class="inline-toggle">
+          <label>Beta Updates</label>
+          <div class="toggle-btn" id="beta-toggle" onclick="toggleSetting('BETA_UPDATES')"></div>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">🧪 Beta updates include pre-release features from the staging branch</p>
         <div class="form-group" style="margin-top:16px">
           <button class="btn btn-secondary" onclick="openLogs()">📋 View Logs</button>
         </div>
@@ -965,6 +972,7 @@
         document.getElementById('overlay-position').value = settings.OVERLAY_POSITION || 'top-right';
         document.getElementById('service-port').value = settings.SERVICE_PORT || 5000;
         document.getElementById('debug-toggle').classList.toggle('active', settings.DEBUG_MODE);
+        document.getElementById('beta-toggle').classList.toggle('active', settings.BETA_UPDATES);
 
         // New settings
         document.getElementById('camera-toggle').classList.toggle('active', settings.CAMERA_ENABLED !== false);
@@ -991,7 +999,7 @@
       const recordOnMotion = settings.RECORD_ON_MOTION === true;
       const screenMode = settings.SCREEN_CONTROL_MODE || 'auto';
 
-      // Camera-dependent elements
+      // Camera-dependent elements (except camera toggle itself)
       document.querySelectorAll('[data-feature="camera"]').forEach(el => {
         if (!cameraEnabled) {
           el.style.opacity = '0.5';
@@ -1001,6 +1009,18 @@
           el.style.pointerEvents = 'auto';
         }
       });
+
+      // Stream settings content (resolution, fps, quality) - disable when camera is off
+      const streamSettingsContent = document.getElementById('stream-settings-content');
+      if (streamSettingsContent) {
+        if (!cameraEnabled) {
+          streamSettingsContent.style.opacity = '0.5';
+          streamSettingsContent.style.pointerEvents = 'none';
+        } else {
+          streamSettingsContent.style.opacity = '1';
+          streamSettingsContent.style.pointerEvents = 'auto';
+        }
+      }
 
       // Recording-dependent elements
       document.querySelectorAll('[data-feature="recording"]').forEach(el => {
@@ -1035,6 +1055,20 @@
         const body = previewCard.querySelector('.card-body');
         if (body && !body.querySelector('.disabled-message')) {
           body.innerHTML = '<p class="disabled-message" style="text-align:center;color:var(--text-muted);padding:20px;">Camera is disabled</p>';
+        }
+      } else if (previewCard && cameraEnabled) {
+        const body = previewCard.querySelector('.card-body');
+        if (body && body.querySelector('.disabled-message')) {
+          // Restore preview
+          body.innerHTML = `
+            <div class="preview-container">
+              <img id="preview" src="/snapshot" alt="Camera Preview">
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-secondary" onclick="refreshPreview()">🔄 Refresh</button>
+              <button class="btn btn-sm btn-primary" onclick="window.open('/stream', '_blank')">📺 Open Stream</button>
+            </div>
+          `;
         }
       }
 

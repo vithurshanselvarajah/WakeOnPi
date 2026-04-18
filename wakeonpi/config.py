@@ -39,6 +39,8 @@ DEFAULTS = {
     "STORAGE_FULL_ACTION": "pause",  # "pause" or "overwrite"
     # Screen control mode: "auto" (motion-based), "always_on", "always_off"
     "SCREEN_CONTROL_MODE": "auto",
+    # Beta updates - use staging branch for beta releases
+    "BETA_UPDATES": False,
 }
 
 

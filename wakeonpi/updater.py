@@ -11,8 +11,9 @@ from . import config
 
 log = logging.getLogger("Updater")
 
-GITHUB_API_URL = "https://api.github.com/repos/vithurshanselvarajah/WakeOnPi/releases/latest"
-GITHUB_RELEASES_URL = "https://api.github.com/repos/vithurshanselvarajah/WakeOnPi/releases"
+GITHUB_REPO = "vithurshanselvarajah/WakeOnPi"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
 PROJECT_ROOT = Path(__file__).parent.parent
 
 _update_info = {
@@ -26,6 +27,7 @@ _update_info = {
     "checking": False,
     "updating": False,
     "update_error": None,
+    "is_beta": False,
 }
 _lock = threading.Lock()
 
@@ -94,17 +96,39 @@ def check_for_updates():
     
     try:
         current = get_current_version()
+        settings = config.current_settings()
+        is_beta = settings.get("BETA_UPDATES", False)
+        
+        # Use different API endpoint for beta vs stable
+        if is_beta:
+            # Get all releases including prereleases
+            api_url = GITHUB_RELEASES_URL
+        else:
+            # Get only latest stable release
+            api_url = GITHUB_API_URL
         
         req = urllib.request.Request(
-            GITHUB_API_URL,
+            api_url,
             headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "WakeOnPi"}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
         
-        latest_tag = data.get("tag_name", "v0.0.0")
+        # For beta, find latest release (including prereleases)
+        # For stable, data is already the latest stable release
+        if is_beta:
+            if isinstance(data, list) and len(data) > 0:
+                # Get the first release (most recent)
+                release = data[0]
+            else:
+                raise ValueError("No releases found")
+        else:
+            release = data
+        
+        latest_tag = release.get("tag_name", "v0.0.0")
         latest = latest_tag.lstrip("v")
-        changelog = data.get("body", "No changelog available.")
+        changelog = release.get("body", "No changelog available.")
+        is_prerelease = release.get("prerelease", False)
         
         is_newer = pkg_version.parse(latest) > pkg_version.parse(current)
         
@@ -124,9 +148,10 @@ def check_for_updates():
                 "checking": False,
                 "updating": False,
                 "update_error": None,
+                "is_beta": is_prerelease,
             }
         
-        log.info(f"Update check: current={current}, latest={latest}, available={is_newer}, breaking={len(new_packages) > 0}")
+        log.info(f"Update check: current={current}, latest={latest}, available={is_newer}, beta_mode={is_beta}, is_prerelease={is_prerelease}")
         
     except urllib.error.URLError as e:
         log.error(f"Network error checking for updates: {e}")
@@ -177,29 +202,50 @@ def perform_update():
     try:
         log.info("Starting update process...")
         
-        _run_git_command("fetch", "origin", "main")
+        settings = config.current_settings()
+        is_beta = settings.get("BETA_UPDATES", False)
+        target_branch = "staging" if is_beta else "main"
         
-        _run_git_command("stash", "push", "-m", "WakeOnPi auto-update stash")
+        log.info(f"Update target: branch={target_branch}, beta_mode={is_beta}")
         
+        # Fetch latest from origin
+        _run_git_command("fetch", "origin", target_branch)
+        
+        # Stash any local changes
         try:
-            _run_git_command("checkout", "main")
-            _run_git_command("pull", "origin", "main")
+            _run_git_command("stash", "push", "-m", "WakeOnPi auto-update stash")
         except Exception:
-            _run_git_command("stash", "pop")
+            log.debug("No local changes to stash")
+        
+        # Checkout and pull the target branch
+        try:
+            _run_git_command("checkout", target_branch)
+            _run_git_command("reset", "--hard", f"origin/{target_branch}")
+        except Exception as e:
+            log.error(f"Failed to checkout {target_branch}: {e}")
+            try:
+                _run_git_command("stash", "pop")
+            except Exception:
+                pass
             raise
         
+        # Try to restore stashed changes
         try:
             _run_git_command("stash", "pop")
         except Exception:
-            pass
+            log.debug("No stash to pop or conflicts")
         
         with _lock:
             _update_info["updating"] = False
             _update_info["available"] = False
             _update_info["current_version"] = _update_info["latest_version"]
         
-        log.info("Update completed successfully. Restart required.")
-        return True, "Update completed. Please restart the service."
+        log.info("Update completed successfully. Restarting service...")
+        
+        # Restart the service
+        restart_service()
+        
+        return True, "Update completed. Service is restarting."
         
     except subprocess.TimeoutExpired:
         log.error("Update timed out")
@@ -213,6 +259,24 @@ def perform_update():
             _update_info["updating"] = False
             _update_info["update_error"] = str(e)
         return False, f"Update failed: {e}"
+
+
+def restart_service():
+    """Restart the WakeOnPi service using systemctl."""
+    try:
+        log.info("Restarting WakeOnPi service...")
+        result = subprocess.run(
+            ["sudo", "systemctl", "restart", "wakeonpi"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            log.error(f"Service restart failed: {result.stderr}")
+        else:
+            log.info("Service restart initiated")
+    except Exception as e:
+        log.exception(f"Failed to restart service: {e}")
 
 
 def check_for_updates_async():
