@@ -31,6 +31,7 @@ def _on_connect(client, userdata, flags, rc):
     prefix = config.MQTT_TOPIC_PREFIX
     client.subscribe(f"{prefix}/command/screen/set")
     client.subscribe(f"{prefix}/command/screen/brightness")
+    client.subscribe(f"{prefix}/command/screen/mode")
     client.subscribe(f"{prefix}/command/browser/url_set")
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
@@ -60,6 +61,9 @@ def _on_connect(client, userdata, flags, rc):
         publish_state("system/version", str(version))
         global _last_version
         _last_version = str(version)
+        # Publish screen mode
+        screen_mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
+        publish_screen_mode(screen_mode)
     except Exception:
         log.exception("Failed to publish system info")
 
@@ -169,6 +173,19 @@ def _on_message(client, userdata, msg):
                 publish_brightness(val)
             except Exception:
                 log.exception("Failed to set brightness")
+
+        elif msg.topic == f"{prefix}/command/screen/mode":
+            try:
+                mode = payload.lower().strip()
+                if mode in ("auto", "always_on", "always_off"):
+                    config.update_settings(SCREEN_CONTROL_MODE=mode)
+                    publish_screen_mode(mode)
+                    from . import motion
+                    motion.apply_screen_mode()
+                else:
+                    log.warning(f"Invalid screen mode: {mode}")
+            except Exception:
+                log.exception("Failed to set screen mode")
 
         elif msg.topic == f"{prefix}/command/update/check":
             try:
@@ -337,6 +354,10 @@ def publish_brightness(level):
     publish_state("screen/brightness", str(level))
 
 
+def publish_screen_mode(mode):
+    publish_state("screen/mode", mode)
+
+
 def publish_storage(free_gb, total_gb, percent):
     publish_state("storage/free_gb", str(free_gb))
     publish_state("storage/total_gb", str(total_gb))
@@ -360,7 +381,11 @@ def _publish_ha_discovery(prefix):
 
     version = _get_version()
     ip = state.get_system_ip()
-    port = config.current_settings().get("SERVICE_PORT", 5000)
+    settings = config.current_settings()
+    port = settings.get("SERVICE_PORT", 5000)
+    camera_enabled = settings.get("CAMERA_ENABLED", True)
+    recording_enabled = settings.get("RECORDING_ENABLED", True)
+    
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
@@ -388,6 +413,13 @@ def _publish_ha_discovery(prefix):
             "payload_off": "OFF",
             "icon": "mdi:monitor",
         }),
+        ("select", f"{prefix}_screen_mode", {
+            "name": "Screen Control Mode",
+            "command_topic": f"{prefix}/command/screen/mode",
+            "state_topic": f"{prefix}/state/screen/mode",
+            "options": ["auto", "always_on", "always_off"],
+            "icon": "mdi:monitor-screenshot",
+        }),
         ("number", f"{prefix}_brightness", {
             "name": "Brightness",
             "command_topic": f"{prefix}/command/screen/brightness",
@@ -413,14 +445,6 @@ def _publish_ha_discovery(prefix):
             "name": "Browser Refresh",
             "command_topic": f"{prefix}/command/browser/refresh",
             "icon": "mdi:refresh",
-        }),
-        ("switch", f"{prefix}_recording", {
-            "name": "Recording",
-            "command_topic": f"{prefix}/command/recording/toggle",
-            "state_topic": f"{prefix}/state/recording/active",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:record-rec",
         }),
         ("sensor", f"{prefix}_system_ip", {
             "name": "System IP",
@@ -490,6 +514,17 @@ def _publish_ha_discovery(prefix):
             "icon": "mdi:alert-circle-outline",
         }),
     ]
+
+    # Conditionally add recording entity if enabled
+    if recording_enabled and camera_enabled:
+        discoveries.append(("switch", f"{prefix}_recording", {
+            "name": "Recording",
+            "command_topic": f"{prefix}/command/recording/toggle",
+            "state_topic": f"{prefix}/state/recording/active",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "icon": "mdi:record-rec",
+        }))
 
     for component, unique_id, payload in discoveries:
         payload["unique_id"] = unique_id

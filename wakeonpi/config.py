@@ -29,6 +29,16 @@ DEFAULTS = {
     "OVERLAY_POSITION": "top-right",
     "SERVICE_PORT": 5000,
     "DEBUG_MODE": False,
+    # Camera & Recording settings
+    "CAMERA_ENABLED": True,
+    "RECORDING_ENABLED": True,
+    "RECORD_ON_MOTION": False,
+    "RECORD_POST_MOTION_TIMEOUT": 10,
+    # Storage management
+    "STORAGE_MAX_PERCENT": 90,
+    "STORAGE_FULL_ACTION": "pause",  # "pause" or "overwrite"
+    # Screen control mode: "auto" (motion-based), "always_on", "always_off"
+    "SCREEN_CONTROL_MODE": "auto",
 }
 
 

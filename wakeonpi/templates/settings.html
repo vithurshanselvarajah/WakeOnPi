@@ -442,7 +442,15 @@
         <span class="chevron">▼</span>
       </div>
       <div class="card-body">
-        <div class="inline-toggle">
+        <div class="form-group">
+          <label>Screen Control Mode</label>
+          <select id="screen-mode" onchange="updateSetting('SCREEN_CONTROL_MODE', this.value)">
+            <option value="auto">Auto (Motion-based)</option>
+            <option value="always_on">Always On</option>
+            <option value="always_off">Always Off</option>
+          </select>
+        </div>
+        <div class="inline-toggle" id="display-power-section">
           <label>Display Power</label>
           <div class="toggle-btn" id="display-toggle" onclick="toggleDisplay()"></div>
         </div>
@@ -466,13 +474,13 @@
         <div class="quick-actions">
           <button class="btn btn-secondary" onclick="mqttReconnect()">🔌 Reconnect MQTT</button>
           <button class="btn btn-secondary" onclick="browserRefresh()">🔄 Refresh Browser</button>
-          <button class="btn btn-secondary" id="recording-btn" onclick="toggleRecording()">⏺️ Start Recording</button>
+          <button class="btn btn-secondary" id="recording-btn" onclick="toggleRecording()" data-feature="recording">⏺️ Start Recording</button>
           <button class="btn btn-secondary" onclick="restartServices()">🔁 Restart Services</button>
         </div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="camera-preview-card" data-feature="camera">
       <div class="card-header" onclick="toggleCard(this)">
         <h2><span class="icon">📷</span> Camera Preview</h2>
         <span class="chevron">▼</span>
@@ -518,13 +526,17 @@
       </div>
     </div>
 
-    <div class="card collapsed">
+    <div class="card collapsed" id="stream-settings-card" data-feature="camera">
       <div class="card-header" onclick="toggleCard(this)">
         <h2><span class="icon">🎬</span> Stream Settings</h2>
         <span class="chevron">▼</span>
       </div>
       <div class="card-body">
-        <div class="form-group">
+        <div class="inline-toggle">
+          <label>Enable Camera</label>
+          <div class="toggle-btn" id="camera-toggle" onclick="toggleSetting('CAMERA_ENABLED')"></div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
           <label>Resolution</label>
           <select id="stream-resolution" onchange="updateSetting('STREAM_RESOLUTION', this.value)">
             <option value="640x360">640x360 (Low)</option>
@@ -554,6 +566,39 @@
               <option value="95">95% (Best)</option>
             </select>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed" id="recording-settings-card" data-feature="recording">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">⏺️</span> Recording Settings</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="inline-toggle">
+          <label>Enable Recording</label>
+          <div class="toggle-btn" id="recording-toggle" onclick="toggleSetting('RECORDING_ENABLED')"></div>
+        </div>
+        <div class="inline-toggle" id="record-motion-section">
+          <label>Record on Motion</label>
+          <div class="toggle-btn" id="record-motion-toggle" onclick="toggleSetting('RECORD_ON_MOTION')"></div>
+        </div>
+        <div class="form-group" id="post-motion-timeout-section" style="margin-top:12px">
+          <label>Post-Motion Recording (seconds)</label>
+          <input type="number" id="post-motion-timeout" min="1" max="300" step="1" onchange="updateSetting('RECORD_POST_MOTION_TIMEOUT', parseInt(this.value))">
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Recording continues for this duration after motion stops</p>
+        </div>
+        <div class="form-group" style="margin-top:16px">
+          <label>Max Storage Usage (%)</label>
+          <input type="number" id="storage-max" min="50" max="99" step="1" onchange="updateSetting('STORAGE_MAX_PERCENT', parseInt(this.value))">
+        </div>
+        <div class="form-group">
+          <label>When Storage Full</label>
+          <select id="storage-action" onchange="updateSetting('STORAGE_FULL_ACTION', this.value)">
+            <option value="pause">Pause Recording</option>
+            <option value="overwrite">Delete Oldest Recording</option>
+          </select>
         </div>
       </div>
     </div>
@@ -920,11 +965,83 @@
         document.getElementById('overlay-position').value = settings.OVERLAY_POSITION || 'top-right';
         document.getElementById('service-port').value = settings.SERVICE_PORT || 5000;
         document.getElementById('debug-toggle').classList.toggle('active', settings.DEBUG_MODE);
+
+        // New settings
+        document.getElementById('camera-toggle').classList.toggle('active', settings.CAMERA_ENABLED !== false);
+        document.getElementById('recording-toggle').classList.toggle('active', settings.RECORDING_ENABLED !== false);
+        document.getElementById('record-motion-toggle').classList.toggle('active', settings.RECORD_ON_MOTION);
+        document.getElementById('post-motion-timeout').value = settings.RECORD_POST_MOTION_TIMEOUT || 10;
+        document.getElementById('storage-max').value = settings.STORAGE_MAX_PERCENT || 90;
+        document.getElementById('storage-action').value = settings.STORAGE_FULL_ACTION || 'pause';
+        document.getElementById('screen-mode').value = settings.SCREEN_CONTROL_MODE || 'auto';
+
+        // Update feature visibility
+        updateFeatureVisibility(settings);
       }
 
       // Handle update info from status
       if (data.update && !updateDismissed) {
         handleUpdateInfo(data.update);
+      }
+    }
+
+    function updateFeatureVisibility(settings) {
+      const cameraEnabled = settings.CAMERA_ENABLED !== false;
+      const recordingEnabled = settings.RECORDING_ENABLED !== false;
+      const recordOnMotion = settings.RECORD_ON_MOTION === true;
+      const screenMode = settings.SCREEN_CONTROL_MODE || 'auto';
+
+      // Camera-dependent elements
+      document.querySelectorAll('[data-feature="camera"]').forEach(el => {
+        if (!cameraEnabled) {
+          el.style.opacity = '0.5';
+          el.style.pointerEvents = 'none';
+        } else {
+          el.style.opacity = '1';
+          el.style.pointerEvents = 'auto';
+        }
+      });
+
+      // Recording-dependent elements
+      document.querySelectorAll('[data-feature="recording"]').forEach(el => {
+        if (!recordingEnabled || !cameraEnabled) {
+          el.style.opacity = '0.5';
+          el.style.pointerEvents = 'none';
+        } else {
+          el.style.opacity = '1';
+          el.style.pointerEvents = 'auto';
+        }
+      });
+
+      // Record on motion sections
+      const recordMotionSection = document.getElementById('record-motion-section');
+      const postMotionSection = document.getElementById('post-motion-timeout-section');
+      if (recordMotionSection) {
+        recordMotionSection.style.display = recordingEnabled && cameraEnabled ? 'flex' : 'none';
+      }
+      if (postMotionSection) {
+        postMotionSection.style.display = recordOnMotion && recordingEnabled && cameraEnabled ? 'block' : 'none';
+      }
+
+      // Recording settings card visibility
+      const recordingCard = document.getElementById('recording-settings-card');
+      if (recordingCard) {
+        recordingCard.style.display = cameraEnabled ? 'block' : 'none';
+      }
+
+      // Camera preview card message when disabled
+      const previewCard = document.getElementById('camera-preview-card');
+      if (previewCard && !cameraEnabled) {
+        const body = previewCard.querySelector('.card-body');
+        if (body && !body.querySelector('.disabled-message')) {
+          body.innerHTML = '<p class="disabled-message" style="text-align:center;color:var(--text-muted);padding:20px;">Camera is disabled</p>';
+        }
+      }
+
+      // Display power toggle - only show in auto mode
+      const displayPowerSection = document.getElementById('display-power-section');
+      if (displayPowerSection) {
+        displayPowerSection.style.display = screenMode === 'auto' ? 'flex' : 'none';
       }
     }
 
@@ -979,11 +1096,16 @@
     function updateSetting(key, value) {
       send('update_settings', { settings: { [key]: value } });
       showToast('Setting updated');
+      // Update local settings for feature visibility
+      settings[key] = value;
+      updateFeatureVisibility(settings);
     }
 
     function toggleSetting(key) {
       const current = settings[key];
-      updateSetting(key, !current);
+      const newValue = !current;
+      settings[key] = newValue;
+      updateSetting(key, newValue);
     }
 
     function refreshPreview() {

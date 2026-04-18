@@ -60,7 +60,9 @@ SETTINGS_KEYS = [
     "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT",
     "BRIGHTNESS_PATH", "BRIGHTNESS_MAX_PATH", "STREAM_RESOLUTION", "STREAM_FPS", "STREAM_QUALITY",
     "OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "OVERLAY_POSITION",
-    "SERVICE_PORT", "DEBUG_MODE"
+    "SERVICE_PORT", "DEBUG_MODE",
+    "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "RECORD_POST_MOTION_TIMEOUT",
+    "STORAGE_MAX_PERCENT", "STORAGE_FULL_ACTION", "SCREEN_CONTROL_MODE"
 ]
 
 
@@ -69,9 +71,10 @@ def _parse_setting(key, val):
         return int(val)
     if key in ("INACTIVITY_TIMEOUT", "CHECK_INTERVAL"):
         return float(val)
-    if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT"):
+    if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT", "RECORD_POST_MOTION_TIMEOUT", "STORAGE_MAX_PERCENT"):
         return int(val)
-    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE"):
+    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE", 
+               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION"):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
     if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
         return val if val != SENSITIVE_PLACEHOLDER else None
@@ -206,6 +209,9 @@ def settings_restart():
 @app.route("/stream")
 @requires_auth
 def video_feed():
+    if not config.current_settings().get("CAMERA_ENABLED", True):
+        return "Camera is disabled", 503
+
     @stream_with_context
     def gen():
         with state.clients_lock:
@@ -241,6 +247,9 @@ def motion_alerts():
 @app.route("/settings/recording/toggle", methods=["POST"])
 @requires_auth
 def settings_recording_toggle():
+    cfg = config.current_settings()
+    if not cfg.get("RECORDING_ENABLED", True) or not cfg.get("CAMERA_ENABLED", True):
+        return "Recording is disabled", 503
     try:
         if recorder.is_recording():
             ok, res = recorder.stop_recording()
@@ -270,6 +279,8 @@ def health():
 @app.route("/snapshot")
 @requires_auth
 def snapshot():
+    if not config.current_settings().get("CAMERA_ENABLED", True):
+        return "Camera is disabled", 503
     try:
         switch_to_full_mode()
         time.sleep(0.1)
@@ -521,11 +532,13 @@ if WEBSOCKET_ENABLED:
                         browser.refresh()
                         broadcast_status()
                     elif action == "toggle_recording":
-                        if recorder.is_recording():
-                            recorder.stop_recording()
-                        else:
-                            recorder.start_recording(config.RECORDINGS_ROOT)
-                        broadcast_status()
+                        cfg = config.current_settings()
+                        if cfg.get("RECORDING_ENABLED", True) and cfg.get("CAMERA_ENABLED", True):
+                            if recorder.is_recording():
+                                recorder.stop_recording()
+                            else:
+                                recorder.start_recording(config.RECORDINGS_ROOT)
+                            broadcast_status()
                     elif action == "restart_services":
                         mqtt.restart()
                         browser.stop()
@@ -546,6 +559,10 @@ if WEBSOCKET_ENABLED:
                             config.update_settings(**updates)
                             if any(k.startswith("STREAM_") for k in updates):
                                 reconfigure_camera()
+                            if "SCREEN_CONTROL_MODE" in updates:
+                                from . import motion as motion_module
+                                motion_module.apply_screen_mode()
+                                mqtt.publish_screen_mode(updates["SCREEN_CONTROL_MODE"])
                             mqtt.restart()
                         broadcast_status()
                     elif action == "check_update":
