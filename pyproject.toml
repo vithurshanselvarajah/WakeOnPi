@@ -1,6 +1,6 @@
 [project]
 name = "WakeOnPi"
-version = "0.0.5-beta.202604182329"
+version = "0.0.5-beta.202604182345"
 dependencies = [
     "flask",
     "numpy",
