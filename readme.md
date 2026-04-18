@@ -7,19 +7,30 @@ Key points:
 - Motion detection is performed on low-resolution YUV frames for efficiency.
 - The camera switches to a higher-resolution stream only while clients are connected.
 - The touch display's backlight is controlled via sysfs to save power and extend display life.
+- Display brightness control for Touch Display 2.
 - Basic HTTP authentication protects the stream and settings pages.
-- Optional MQTT integration can publish motion, display state and the stream URL, and accept simple display control commands.
+- Optional MQTT integration with auto-reconnect and full Home Assistant discovery.
+- Real-time WebSocket-based settings page with system monitoring.
+- Customizable stream overlay with time and stats.
 
 ---
 
 ## Features
 
 - MJPEG live stream served over HTTP (default port 5000)
+- Snapshot endpoint at `/snapshot` for single frame capture
 - Low-res motion detection with configurable sensitivity and timeouts
 - Automatic display on/off using `/sys/class/backlight/10-0045/bl_power` (Touch Display 2)
-- Settings UI at `/settings` (protected by basic auth)
+- Display brightness control (5-100%)
+- Adjustable stream resolution, FPS, and quality
+- System overlay with time and stats
+- Modern WebSocket-based settings UI at `/settings` (mobile-friendly)
+- Health check endpoint at `/health` with system stats
 - Motion state endpoint at `/motion_alerts` (returns `motion` or `nomotion`)
-- MQTT support (publish/subscribe) when `paho-mqtt` is installed
+- MQTT support with auto-reconnect and exponential backoff
+- Full Home Assistant MQTT auto-discovery
+- Real-time system stats: CPU temp, usage, memory, storage
+- Storage free space monitoring and reporting
 
 ---
 
@@ -35,6 +46,7 @@ Key points:
 On the Pi, install required packages. The project uses Python and these libraries:
 
 - Flask
+- Flask-Sock (WebSocket support)
 - OpenCV (cv2)
 - picamera2
 - paho-mqtt (optional, required only if you want MQTT)
@@ -75,9 +87,15 @@ Log in with the username and password you set.
 
 ## Settings and endpoints
 
-- `/settings` — small web UI to adjust values (MOTION_THRESHOLD, INACTIVITY_TIMEOUT, CHECK_INTERVAL, MQTT settings). Protected by the same basic auth.
-- `/motion_alerts` — returns `motion` or `nomotion` depending on the current detected state.
-- The main stream served at `/` is an MJPEG multipart response suitable for browser preview or apps that support MJPEG.
+- `/` — MJPEG live stream (protected by basic auth)
+- `/settings` — Modern WebSocket-based settings UI with real-time updates (protected by basic auth)
+- `/snapshot` — Single JPEG frame capture (protected by basic auth)
+- `/health` — JSON health check with system stats (no auth required)
+- `/motion_alerts` — Returns `motion` or `nomotion` (no auth required)
+- `/api/status` — JSON status endpoint (protected by basic auth)
+- `/api/settings` — GET/POST settings via JSON (protected by basic auth)
+- `/api/display` — POST to control display on/off and brightness (protected by basic auth)
+- `/ws` — WebSocket endpoint for real-time updates
 
 ---
 
@@ -86,9 +104,16 @@ Log in with the username and password you set.
 The application stores runtime settings in `wakeonpi/settings.json` and exposes defaults in `wakeonpi/config.py`. Default values include:
 
 - MOTION_THRESHOLD: 1500
-- INACTIVITY_TIMEOUT: 15 (seconds)
+- INACTIVITY_TIMEOUT: 60 (seconds)
 - CHECK_INTERVAL: 1.0 (seconds)
+- STREAM_RESOLUTION: 854x480
+- STREAM_FPS: 10
+- STREAM_QUALITY: 75
 - MQTT_TOPIC_PREFIX: `wakeonpi`
+- OVERLAY_ENABLED: true
+- OVERLAY_SHOW_TIME: true
+- OVERLAY_SHOW_STATS: false
+- OVERLAY_POSITION: top-right
 
 You can edit these values either in the `settings.json` file or via the `/settings` web UI.
 
@@ -128,10 +153,43 @@ sudo systemctl daemon-reload; sudo systemctl enable wakeonpi; sudo systemctl sta
 
 If `paho-mqtt` is installed and MQTT settings are configured in the `/settings` UI or `wakeonpi/settings.json`, WakeOnPi will:
 
-- Publish motion state: `<prefix>/motion` with `ON`/`OFF`
-- Publish display state: `<prefix>/screen` with `ON`/`OFF`
-- Publish stream URL: `<prefix>/stream_url`
-- Subscribe to `<prefix>/screen/set` to accept `on`/`off`/`1`/`0`/`true` values which will toggle the display. When a message is received the display is set and a manual display override is engaged briefly.
+**Published topics (state):**
+- `<prefix>/state/motion` — `ON`/`OFF`
+- `<prefix>/state/screen` — `ON`/`OFF`
+- `<prefix>/state/screen/brightness` — 5-100
+- `<prefix>/state/camera/stream_url` — Stream URL
+- `<prefix>/state/browser/url` — Current browser URL
+- `<prefix>/state/recording/active` — `ON`/`OFF`
+- `<prefix>/state/system/version` — Version string
+- `<prefix>/state/system/cpu_temp` — CPU temperature in °C
+- `<prefix>/state/system/cpu_usage` — CPU usage percentage
+- `<prefix>/state/system/memory_percent` — Memory usage percentage
+- `<prefix>/state/system/uptime` — Uptime in seconds
+- `<prefix>/state/storage/free_gb` — Free storage in GB
+- `<prefix>/state/storage/used_percent` — Storage used percentage
+- `<prefix>/state/clients_connected` — Number of connected stream viewers
+- `<prefix>/state/availability` — `online`/`offline`
+
+**Command topics (subscribe):**
+- `<prefix>/command/screen/set` — `on`/`off`/`1`/`0`/`true`/`false`
+- `<prefix>/command/screen/brightness` — 5-100
+- `<prefix>/command/browser/url_set` — URL to navigate to
+- `<prefix>/command/browser/refresh` — Any payload refreshes browser
+- `<prefix>/command/recording/toggle` — Any payload toggles recording
+- `<prefix>/command/overlay/notify` — JSON `{"message": "text", "duration": 5}` or plain text
+
+**Home Assistant Auto-Discovery:**
+WakeOnPi automatically publishes MQTT discovery messages for Home Assistant, creating:
+- Binary sensor for motion detection
+- Switch for screen on/off
+- Number for brightness control
+- Sensors for CPU temp, usage, memory, storage, uptime, version
+- Text entity for browser URL control
+- Button for browser refresh
+- Switch for recording toggle
+- Camera entity for the MJPEG stream
+
+MQTT auto-reconnect is enabled with exponential backoff (5s to 5min).
 
 By default the MQTT prefix is `wakeonpi`.
 
