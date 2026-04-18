@@ -57,9 +57,11 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          BETA_SUMMARY=$(echo "$COMMIT_MSG" | sed 's/^beta:[[:space:]]*//')
+          # Extract just the first line (summary) after "beta:"
+          BETA_SUMMARY=$(echo "$COMMIT_MSG" | head -1 | sed 's/^beta:[[:space:]]*//')
           
           echo "## 🧪 Beta Release v${{ steps.prepare.outputs.version }}" > changelog.md
           echo "" >> changelog.md
