@@ -347,12 +347,15 @@ def _publish_ha_discovery(prefix):
         return
 
     version = _get_version()
+    ip = state.get_system_ip()
+    port = config.current_settings().get("SERVICE_PORT", 5000)
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
         "manufacturer": "VithuselServices",
         "model": "Raspberry Pi 5",
         "sw_version": str(version),
+        "configuration_url": f"http://{ip}:{port}/settings",
     }
 
     discoveries = [
