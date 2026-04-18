@@ -544,6 +544,14 @@ if WEBSOCKET_ENABLED:
                         browser.stop()
                         browser.start()
                         broadcast_status()
+                    elif action == "restart_system_service":
+                        # Full system service restart via systemctl
+                        try:
+                            from . import updater
+                            updater.restart_service()
+                        except Exception:
+                            log.exception("Failed to restart system service")
+                        broadcast_status()
                     elif action == "update_settings":
                         updates = {}
                         for key, val in data.get("settings", {}).items():
