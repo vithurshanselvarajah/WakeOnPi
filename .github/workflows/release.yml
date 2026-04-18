@@ -1,34 +1,119 @@
-name: Release on "release" commits to main
+name: Release Pipeline
 
 on:
   push:
     branches:
-      - main
+      - '**'
 
 jobs:
   create-release:
-    # Use 'contains' or 'startsWith' depending on your preference
-    if: ${{ startsWith(github.event.head_commit.message, 'release') }}
+    if: ${{ startsWith(github.event.head_commit.message, 'release:') && github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Extract version
+      - name: Extract version and detect breaking changes
         id: prepare
         run: |
-          # Use grep to find the version in pyproject.toml
           VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          
+          if git diff origin/main...HEAD --name-only | grep -q "requirements.txt"; then
+            CURRENT_REQS=$(cat requirements.txt | sort)
+            git show origin/main:requirements.txt > /tmp/main_requirements.txt 2>/dev/null || echo "" > /tmp/main_requirements.txt
+            MAIN_REQS=$(cat /tmp/main_requirements.txt | sort)
+            
+            CURRENT_PKGS=$(echo "$CURRENT_REQS" | sed 's/[=<>!].*//' | sort -u)
+            MAIN_PKGS=$(echo "$MAIN_REQS" | sed 's/[=<>!].*//' | sort -u)
+            
+            NEW_PKGS=$(comm -23 <(echo "$CURRENT_PKGS") <(echo "$MAIN_PKGS"))
+            if [ -n "$NEW_PKGS" ]; then
+              echo "breaking=true" >> $GITHUB_OUTPUT
+              echo "new_packages=$NEW_PKGS" >> $GITHUB_OUTPUT
+            else
+              echo "breaking=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "breaking=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          RELEASE_SUMMARY=$(echo "$COMMIT_MSG" | sed 's/^release:[[:space:]]*//')
+          
+          echo "## Release v${{ steps.prepare.outputs.version }}" > changelog.md
+          echo "" >> changelog.md
+          echo "### Summary" >> changelog.md
+          echo "$RELEASE_SUMMARY" >> changelog.md
+          echo "" >> changelog.md
+          
+          if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
+            echo "### ⚠️ Breaking Changes" >> changelog.md
+            echo "This release includes new dependencies that require manual installation:" >> changelog.md
+            echo '```' >> changelog.md
+            echo "${{ steps.prepare.outputs.new_packages }}" >> changelog.md
+            echo '```' >> changelog.md
+            echo "Run \`pip install -r requirements.txt\` after updating." >> changelog.md
+            echo "" >> changelog.md
+          fi
+          
+          echo "### Changes" >> changelog.md
+          git log origin/main..HEAD --pretty=format:"- %s" --no-merges >> changelog.md
+          echo "" >> changelog.md
+          
+          echo "### Files Changed" >> changelog.md
+          git diff origin/main...HEAD --stat | tail -1 >> changelog.md
+          
+          cat changelog.md
+          
+          CHANGELOG_CONTENT=$(cat changelog.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create release metadata file
+        run: |
+          cat > release_info.json << EOF
+          {
+            "version": "${{ steps.prepare.outputs.version }}",
+            "breaking": ${{ steps.prepare.outputs.breaking }},
+            "new_packages": "${{ steps.prepare.outputs.new_packages }}",
+            "released_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          EOF
+
+      - name: Merge to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}"
+          git push origin main
 
       - name: Create GitHub Release
         run: |
           TAG="v${{ steps.prepare.outputs.version }}"
+          
+          if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
+            TITLE="$TAG ⚠️ Breaking Changes"
+          else
+            TITLE="$TAG"
+          fi
+          
           gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "Automated release for version ${{ steps.prepare.outputs.version }}" \
-            --generate-notes
+            --title "$TITLE" \
+            --notes-file changelog.md \
+            --target main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

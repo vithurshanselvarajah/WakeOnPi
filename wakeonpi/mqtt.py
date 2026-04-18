@@ -35,6 +35,8 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
+    client.subscribe(f"{prefix}/command/update/check")
+    client.subscribe(f"{prefix}/command/update/install")
 
     try:
         ip = state.get_system_ip()
@@ -155,6 +157,35 @@ def _on_message(client, userdata, msg):
                 publish_brightness(val)
             except Exception:
                 log.exception("Failed to set brightness")
+
+        elif msg.topic == f"{prefix}/command/update/check":
+            try:
+                from . import updater
+                info = updater.check_for_updates()
+                publish_update_info(info)
+            except Exception:
+                log.exception("Failed to check for updates")
+
+        elif msg.topic == f"{prefix}/command/update/install":
+            try:
+                from . import updater
+                info = updater.get_update_info()
+                if info.get("breaking"):
+                    log.warning("Cannot auto-update: breaking changes detected")
+                    publish_state("update/result", json.dumps({
+                        "success": False,
+                        "error": f"Breaking changes. New packages: {', '.join(info.get('new_packages', []))}"
+                    }))
+                else:
+                    success, message = updater.perform_update()
+                    publish_state("update/result", json.dumps({
+                        "success": success,
+                        "message": message
+                    }))
+                    if success:
+                        publish_update_info(updater.get_update_info())
+            except Exception:
+                log.exception("Failed to install update")
 
     except Exception:
         log.exception("Error in MQTT message handler")
@@ -420,6 +451,29 @@ def _publish_ha_discovery(prefix):
             "unit_of_measurement": "%",
             "icon": "mdi:chart-pie",
         }),
+        ("update", f"{prefix}_update", {
+            "name": "Firmware Update",
+            "state_topic": f"{prefix}/state/update/state",
+            "command_topic": f"{prefix}/command/update/install",
+            "payload_install": "install",
+            "value_template": "{{ value_json }}",
+            "icon": "mdi:update",
+        }),
+        ("binary_sensor", f"{prefix}_update_available", {
+            "name": "Update Available",
+            "device_class": "update",
+            "state_topic": f"{prefix}/state/update/available",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "icon": "mdi:package-up",
+        }),
+        ("binary_sensor", f"{prefix}_update_breaking", {
+            "name": "Breaking Update",
+            "state_topic": f"{prefix}/state/update/breaking",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "icon": "mdi:alert-circle-outline",
+        }),
     ]
 
     for component, unique_id, payload in discoveries:
@@ -436,3 +490,32 @@ def _publish_ha_discovery(prefix):
 
 def publish_clients_connected(count):
     publish_state("clients_connected", str(count))
+
+
+def publish_update_info(update_info):
+    """Publish update information to MQTT."""
+    if update_info is None:
+        return
+    
+    publish_state("update/available", "ON" if update_info.get("available", False) else "OFF")
+    publish_state("update/latest_version", update_info.get("latest_version", ""))
+    publish_state("update/current_version", update_info.get("current_version", ""))
+    publish_state("update/breaking", "ON" if update_info.get("is_breaking", False) else "OFF")
+    publish_state("update/changelog", update_info.get("changelog", ""))
+    
+    # Publish JSON state for the HA update entity
+    if update_info.get("available", False):
+        update_state = json.dumps({
+            "installed_version": update_info.get("current_version", ""),
+            "latest_version": update_info.get("latest_version", ""),
+            "release_summary": update_info.get("changelog", ""),
+            "release_url": f"https://github.com/vithuselern/wakeonpi/releases/tag/v{update_info.get('latest_version', '')}",
+            "in_progress": False,
+        })
+    else:
+        update_state = json.dumps({
+            "installed_version": update_info.get("current_version", ""),
+            "latest_version": update_info.get("current_version", ""),
+            "in_progress": False,
+        })
+    publish_state("update/state", update_state)
