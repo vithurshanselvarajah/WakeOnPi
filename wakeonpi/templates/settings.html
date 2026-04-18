@@ -2,96 +2,907 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>WakeOnPi Settings</title>
   <style>
-    *{box-sizing:border-box}
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;background:#f7f7f7;color:#111}
-    .card{background:#fff;border-radius:8px;padding:24px;max-width:760px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-    label{display:block;margin-top:12px;font-weight:600}
-    input[type=text],input[type=number],input[type=password]{width:100%;padding:10px 12px;margin-top:6px;border:1px solid #ddd;border-radius:6px}
-    button{margin-top:16px;padding:10px 14px;border-radius:6px;border:0;background:#0078d4;color:#fff;font-weight:600;cursor:pointer}
-    small{color:#666}
-    .row{display:flex;gap:12px}
-    .col{flex:1;min-width:0}
-    dl{margin:0}
-    dt{font-weight:600}
-    dd{margin-left:0;margin-bottom:12px}
+    :root {
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --card-hover: #222;
+      --border: #333;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+      padding-bottom: 100px;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.5rem; font-weight: 600; }
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot.offline { background: var(--danger); }
+    .status-bar {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .status-item { display: flex; align-items: center; gap: 6px; }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .card-header {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+    .card-header:hover { background: var(--card-hover); }
+    .card-header h2 { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+    .card-header .icon { font-size: 1.2rem; }
+    .card-header .chevron { transition: transform 0.3s; }
+    .card.collapsed .chevron { transform: rotate(-90deg); }
+    .card.collapsed .card-body { display: none; }
+    .card-body { padding: 0 16px 16px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group:last-child { margin-bottom: 0; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    input[type="range"] {
+      padding: 0;
+      height: 8px;
+      -webkit-appearance: none;
+      background: var(--border);
+      border-radius: 4px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+    }
+    .row { display: flex; gap: 12px; }
+    .row > * { flex: 1; min-width: 0; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #444; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-sm { padding: 8px 14px; font-size: 0.85rem; width: auto; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .toggle-btn {
+      position: relative;
+      width: 56px;
+      height: 30px;
+      background: var(--border);
+      border-radius: 15px;
+      cursor: pointer;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    .toggle-btn.active { background: var(--success); }
+    .toggle-btn::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    .toggle-btn.active::after { transform: translateX(26px); }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: var(--bg);
+      padding: 14px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value { font-size: 1.5rem; font-weight: 600; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+    .stat-card.warning .stat-value { color: var(--warning); }
+    .stat-card.danger .stat-value { color: var(--danger); }
+    .brightness-control {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brightness-control input { flex: 1; }
+    .brightness-value {
+      min-width: 50px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .quick-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 480px) {
+      .quick-actions { grid-template-columns: 1fr; }
+      .row { flex-direction: column; }
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--card);
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .preview-container {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .preview-container img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .inline-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .inline-toggle:last-child { border-bottom: none; }
+    .inline-toggle label { margin-bottom: 0; color: var(--text); }
+    .ws-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .storage-bar {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .storage-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.3s;
+    }
+    .storage-bar-fill.warning { background: var(--warning); }
+    .storage-bar-fill.danger { background: var(--danger); }
+    .log-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 2000;
+      padding: 16px;
+      overflow: hidden;
+    }
+    .log-modal.show { display: flex; flex-direction: column; }
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .log-header h3 { font-size: 1.2rem; }
+    .log-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .log-filter {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: var(--border);
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .log-filter.active { background: var(--primary); }
+    .log-filter.debug.active { background: #6b7280; }
+    .log-filter.info.active { background: var(--primary); }
+    .log-filter.warning.active { background: var(--warning); }
+    .log-filter.error.active { background: var(--danger); }
+    .log-container {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid var(--border); }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry.debug { color: #9ca3af; }
+    .log-entry.info { color: var(--text); }
+    .log-entry.warning { color: var(--warning); }
+    .log-entry.error { color: var(--danger); }
+    .log-entry.critical { color: #f87171; font-weight: bold; }
+    .log-time { color: var(--text-muted); margin-right: 8px; }
+    .log-level { font-weight: bold; margin-right: 8px; min-width: 60px; display: inline-block; }
+    .log-close {
+      background: var(--danger);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>WakeOnPi Settings</h2>
-    <form method="post">
-      <div class="row">
-        <div class="col">
-          <label>MOTION_THRESHOLD <small>(integer)</small></label>
-          <input name="MOTION_THRESHOLD" type="number" value="{{ s['MOTION_THRESHOLD'] }}">
-        </div>
-        <div class="col">
-          <label>INACTIVITY_TIMEOUT <small>(seconds)</small></label>
-          <input name="INACTIVITY_TIMEOUT" type="text" value="{{ s['INACTIVITY_TIMEOUT'] }}">
+  <div class="container">
+    <header>
+      <div>
+        <h1>🎥 WakeOnPi</h1>
+        <div class="ws-status">
+          <span class="status-dot" id="ws-dot"></span>
+          <span id="ws-status-text">Connecting...</span>
         </div>
       </div>
-      <label>CHECK_INTERVAL <small>(seconds)</small></label>
-      <input name="CHECK_INTERVAL" type="text" value="{{ s['CHECK_INTERVAL'] }}">
-      <label>MQTT Host / Port</label>
-      <div class="row">
-        <div class="col">
-          <input name="MQTT_HOST" type="text" value="{{ s.get('MQTT_HOST') or '' }}" placeholder="localhost">
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-dot" id="mqtt-dot"></span>
+          MQTT
         </div>
-        <div class="col">
-          <input name="MQTT_PORT" type="number" value="{{ s.get('MQTT_PORT') or '' }}">
+        <div class="status-item" id="version-display">v--</div>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">📊</span> System Status</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat-card" id="cpu-temp-card">
+            <div class="stat-value" id="cpu-temp">--°C</div>
+            <div class="stat-label">CPU Temp</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="cpu-usage">--%</div>
+            <div class="stat-label">CPU Usage</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="memory">--%</div>
+            <div class="stat-label">Memory</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="uptime">--</div>
+            <div class="stat-label">Uptime</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="clients">0</div>
+            <div class="stat-label">Viewers</div>
+          </div>
+          <div class="stat-card" id="storage-card">
+            <div class="stat-value" id="storage-free">-- GB</div>
+            <div class="stat-label">Storage Free</div>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label>Storage Usage</label>
+          <div class="storage-bar">
+            <div class="storage-bar-fill" id="storage-bar" style="width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-top:4px">
+            <span id="storage-used">0 GB used</span>
+            <span id="storage-total">of 0 GB</span>
+          </div>
         </div>
       </div>
-      <label>MQTT_TOPIC_PREFIX</label>
-      <input name="MQTT_TOPIC_PREFIX" type="text" value="{{ s.get('MQTT_TOPIC_PREFIX') or '' }}">
-      <label>MQTT_USERNAME</label>
-      <input name="MQTT_USERNAME" type="text" value="{{ s.get('MQTT_USERNAME') or '' }}">
-      <label>MQTT_PASSWORD <small>(sensitive)</small></label>
-      <input name="MQTT_PASSWORD" type="password" value="{{ pwd_display }}" autocomplete="new-password">
-      <label>HTTP_USERNAME</label>
-      <input name="HTTP_USERNAME" type="text" value="{{ s.get('HTTP_USERNAME') or '' }}">
-      <label>HTTP_PASSWORD <small>(sensitive)</small></label>
-      <input name="HTTP_PASSWORD" type="password" value="{{ http_pwd_display }}" autocomplete="new-password">
-      <label>HASS_DASHBOARD_URL</label>
-      <input name="HASS_DASHBOARD_URL" type="text" value="{{ s.get('HASS_DASHBOARD_URL') or '' }}">
-      <label>BACKLIGHT_PATH</label>
-      <input name="BACKLIGHT_PATH" type="text" value="{{ s.get('BACKLIGHT_PATH') or '' }}">
-      <small>Path: {{ status.get('backlight_path') or 'N/A' }} - Writable: {{ 'Yes' if status.get('backlight_writable') else 'No' }}</small>
-      <label>RECORDINGS_ROOT</label>
-      <input name="RECORDINGS_ROOT" type="text" value="{{ s.get('RECORDINGS_ROOT') or '' }}">
-      <small>Path: {{ status.get('recordings_root') or 'N/A' }} - Writable: {% if status.get('recordings_writable') is not none %}{{ 'Yes' if status.get('recordings_writable') else 'No' }}{% else %}Unknown{% endif %}</small>
-      <button type="submit">Save settings</button>
-    </form>
-    <p style="margin-top:12px"><small>Sensitive values are hidden. Leave password fields unchanged to keep current values.</small></p>
-    <div style="margin-top:18px;padding-top:12px;border-top:1px solid #eee">
-      <h3>Status</h3>
-      <dl>
-        <dt>MQTT Connected</dt>
-        <dd>{{ 'Yes' if status.get('mqtt_connected') else 'No' }} <button onclick="fetch('/settings/mqtt/reconnect',{method:'POST'}).then(()=>location.reload())">Reconnect</button></dd>
-        <dt>MQTT Host</dt>
-        <dd>{{ status.get('mqtt_host') or 'N/A' }}:{{ status.get('mqtt_port') or 'N/A' }}</dd>
-        <dt>MQTT Topic Prefix</dt>
-        <dd>{{ status.get('mqtt_topic_prefix') or 'N/A' }}</dd>
-        <dt>Browser Running</dt>
-        <dd>{{ 'Yes' if status.get('browser_running') else 'No' }} <button onclick="fetch('/settings/browser/refresh',{method:'POST'}).then(()=>location.reload())">Refresh</button></dd>
-        <dt>Browser Current URL</dt>
-        <dd>{{ status.get('browser_current_url') or 'N/A' }}</dd>
-        <dt>Motion Active</dt>
-        <dd>{{ 'Yes' if status.get('motion_event') else 'No' }}</dd>
-        <dt>Display On</dt>
-        <dd>{{ 'Yes' if status.get('display_on') else 'No' }}</dd>
-        <dt>Stream URL</dt>
-        <dd>{{ status.get('stream_url') or 'N/A' }}</dd>
-        <dt>Services</dt>
-        <dd><button onclick="fetch('/settings/restart',{method:'POST'}).then(()=>location.reload())">Restart Services</button></dd>
-        <dt>Clients Connected</dt>
-        <dd>{{ status.get('clients_connected') or 0 }}</dd>
-        <dt>Version</dt>
-        <dd>{{ status.get('version') or 'N/A' }}</dd>
-      </dl>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🖥️</span> Display Control</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="inline-toggle">
+          <label>Display Power</label>
+          <div class="toggle-btn" id="display-toggle" onclick="toggleDisplay()"></div>
+        </div>
+        <div class="form-group" style="margin-top:16px">
+          <label>Brightness: <span id="brightness-value">100</span>%</label>
+          <div class="brightness-control">
+            <span>🔅</span>
+            <input type="range" id="brightness-slider" min="5" max="100" step="5" value="100" onchange="setBrightness(this.value)" oninput="document.getElementById('brightness-value').textContent=this.value">
+            <span>🔆</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">⚡</span> Quick Actions</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="quick-actions">
+          <button class="btn btn-secondary" onclick="mqttReconnect()">🔌 Reconnect MQTT</button>
+          <button class="btn btn-secondary" onclick="browserRefresh()">🔄 Refresh Browser</button>
+          <button class="btn btn-secondary" id="recording-btn" onclick="toggleRecording()">⏺️ Start Recording</button>
+          <button class="btn btn-secondary" onclick="restartServices()">🔁 Restart Services</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">📷</span> Camera Preview</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="preview-container">
+          <img id="preview" src="/snapshot" alt="Camera Preview">
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-secondary" onclick="refreshPreview()">🔄 Refresh</button>
+          <button class="btn btn-sm btn-primary" onclick="window.open('/stream', '_blank')">📺 Open Stream</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🔔</span> Overlay & Notifications</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Send Notification</label>
+          <div class="row">
+            <input type="text" id="notify-message" placeholder="Message to display...">
+            <button class="btn btn-primary btn-sm" style="width:auto" onclick="sendNotification()">Send</button>
+          </div>
+        </div>
+        <div class="inline-toggle">
+          <label>Enable Overlay</label>
+          <div class="toggle-btn" id="overlay-toggle" onclick="toggleSetting('OVERLAY_ENABLED')"></div>
+        </div>
+        <div class="inline-toggle">
+          <label>Show Time</label>
+          <div class="toggle-btn" id="overlay-time-toggle" onclick="toggleSetting('OVERLAY_SHOW_TIME')"></div>
+        </div>
+        <div class="inline-toggle">
+          <label>Show System Stats</label>
+          <div class="toggle-btn" id="overlay-stats-toggle" onclick="toggleSetting('OVERLAY_SHOW_STATS')"></div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Position</label>
+          <select id="overlay-position" onchange="updateSetting('OVERLAY_POSITION', this.value)">
+            <option value="top-left">Top Left</option>
+            <option value="top-right">Top Right</option>
+            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-right">Bottom Right</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🎬</span> Stream Settings</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Resolution</label>
+          <select id="stream-resolution" onchange="updateSetting('STREAM_RESOLUTION', this.value)">
+            <option value="640x360">640x360 (Low)</option>
+            <option value="854x480">854x480 (SD)</option>
+            <option value="1280x720">1280x720 (HD)</option>
+            <option value="1920x1080">1920x1080 (Full HD)</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>FPS</label>
+            <select id="stream-fps" onchange="updateSetting('STREAM_FPS', parseInt(this.value))">
+              <option value="5">5 FPS</option>
+              <option value="10">10 FPS</option>
+              <option value="15">15 FPS</option>
+              <option value="20">20 FPS</option>
+              <option value="30">30 FPS</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Quality</label>
+            <select id="stream-quality" onchange="updateSetting('STREAM_QUALITY', parseInt(this.value))">
+              <option value="50">50% (Low)</option>
+              <option value="65">65% (Medium)</option>
+              <option value="75">75% (Good)</option>
+              <option value="85">85% (High)</option>
+              <option value="95">95% (Best)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🎯</span> Motion Detection</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Motion Threshold</label>
+          <input type="number" id="motion-threshold" onchange="updateSetting('MOTION_THRESHOLD', parseInt(this.value))">
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Inactivity Timeout (s)</label>
+            <input type="number" id="inactivity-timeout" step="1" onchange="updateSetting('INACTIVITY_TIMEOUT', parseFloat(this.value))">
+          </div>
+          <div class="form-group">
+            <label>Check Interval (s)</label>
+            <input type="number" id="check-interval" step="0.1" onchange="updateSetting('CHECK_INTERVAL', parseFloat(this.value))">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">📡</span> MQTT Settings</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="form-group">
+            <label>Host</label>
+            <input type="text" id="mqtt-host" onchange="updateSetting('MQTT_HOST', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Port</label>
+            <input type="number" id="mqtt-port" onchange="updateSetting('MQTT_PORT', parseInt(this.value))">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Topic Prefix</label>
+          <input type="text" id="mqtt-prefix" onchange="updateSetting('MQTT_TOPIC_PREFIX', this.value)">
+        </div>
+        <div class="row">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="mqtt-username" onchange="updateSetting('MQTT_USERNAME', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="mqtt-password" onchange="updateSetting('MQTT_PASSWORD', this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🌐</span> Browser & Dashboard</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="stat-grid" style="margin-bottom:16px">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1rem" id="browser-status">--</div>
+            <div class="stat-label">Browser Status</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Dashboard URL</label>
+          <input type="text" id="dashboard-url" onchange="updateSetting('HASS_DASHBOARD_URL', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Current URL</label>
+          <input type="text" id="browser-url" readonly style="background:var(--card)">
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🔒</span> Security</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="form-group">
+            <label>HTTP Username</label>
+            <input type="text" id="http-username" onchange="updateSetting('HTTP_USERNAME', this.value)">
+          </div>
+          <div class="form-group">
+            <label>HTTP Password</label>
+            <input type="password" id="http-password" onchange="updateSetting('HTTP_PASSWORD', this.value)">
+          </div>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">⚠️ Changing credentials requires re-login</p>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">📁</span> Paths & Storage</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Backlight Path</label>
+          <input type="text" id="backlight-path" onchange="updateSetting('BACKLIGHT_PATH', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Brightness Path</label>
+          <input type="text" id="brightness-path" onchange="updateSetting('BRIGHTNESS_PATH', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Recordings Root</label>
+          <input type="text" id="recordings-root" onchange="updateSetting('RECORDINGS_ROOT', this.value)">
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">⚙️</span> System Settings</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Service Port</label>
+          <input type="number" id="service-port" min="1" max="65535" onchange="updateSetting('SERVICE_PORT', parseInt(this.value))">
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">⚠️ Requires restart to take effect</p>
+        </div>
+        <div class="inline-toggle">
+          <label>Debug Mode</label>
+          <div class="toggle-btn" id="debug-toggle" onclick="toggleSetting('DEBUG_MODE')"></div>
+        </div>
+        <div class="form-group" style="margin-top:16px">
+          <button class="btn btn-secondary" onclick="openLogs()">📋 View Logs</button>
+        </div>
+      </div>
     </div>
   </div>
+
+  <div class="log-modal" id="log-modal">
+    <div class="log-header">
+      <h3>📋 System Logs</h3>
+      <div class="log-filters">
+        <button class="log-filter debug active" data-level="DEBUG" onclick="toggleLogFilter(this)">DEBUG</button>
+        <button class="log-filter info active" data-level="INFO" onclick="toggleLogFilter(this)">INFO</button>
+        <button class="log-filter warning active" data-level="WARNING" onclick="toggleLogFilter(this)">WARNING</button>
+        <button class="log-filter error active" data-level="ERROR" onclick="toggleLogFilter(this)">ERROR</button>
+      </div>
+      <button class="log-close" onclick="closeLogs()">✕ Close</button>
+    </div>
+    <div class="log-container" id="log-container"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let ws = null;
+    let reconnectTimeout = null;
+    let settings = {};
+
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+      ws.onopen = () => {
+        document.getElementById('ws-dot').classList.add('online');
+        document.getElementById('ws-dot').classList.remove('offline');
+        document.getElementById('ws-status-text').textContent = 'Connected';
+      };
+
+      ws.onclose = () => {
+        document.getElementById('ws-dot').classList.remove('online');
+        document.getElementById('ws-dot').classList.add('offline');
+        document.getElementById('ws-status-text').textContent = 'Reconnecting...';
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = () => ws.close();
+
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'status') updateUI(data);
+      };
+    }
+
+    function updateUI(data) {
+      document.getElementById('mqtt-dot').classList.toggle('online', data.mqtt_connected);
+      document.getElementById('mqtt-dot').classList.toggle('offline', !data.mqtt_connected);
+      document.getElementById('version-display').textContent = 'v' + (data.version || '--');
+
+      if (data.system) {
+        const sys = data.system;
+        document.getElementById('cpu-temp').textContent = sys.cpu_temp + '°C';
+        document.getElementById('cpu-usage').textContent = sys.cpu_usage + '%';
+        document.getElementById('memory').textContent = sys.memory_percent + '%';
+        document.getElementById('uptime').textContent = formatUptime(sys.uptime);
+
+        const tempCard = document.getElementById('cpu-temp-card');
+        tempCard.classList.toggle('warning', sys.cpu_temp >= 70);
+        tempCard.classList.toggle('danger', sys.cpu_temp >= 80);
+      }
+
+      if (data.storage) {
+        const st = data.storage;
+        document.getElementById('storage-free').textContent = st.free_gb + ' GB';
+        document.getElementById('storage-used').textContent = (st.total_gb - st.free_gb).toFixed(1) + ' GB used';
+        document.getElementById('storage-total').textContent = 'of ' + st.total_gb + ' GB';
+
+        const bar = document.getElementById('storage-bar');
+        bar.style.width = st.used_percent + '%';
+        bar.classList.toggle('warning', st.used_percent >= 70);
+        bar.classList.toggle('danger', st.used_percent >= 90);
+
+        const storageCard = document.getElementById('storage-card');
+        storageCard.classList.toggle('warning', st.used_percent >= 70);
+        storageCard.classList.toggle('danger', st.used_percent >= 90);
+      }
+
+      document.getElementById('clients').textContent = data.clients_connected || 0;
+      document.getElementById('display-toggle').classList.toggle('active', data.display_on);
+      document.getElementById('brightness-slider').value = data.brightness || 100;
+      document.getElementById('brightness-value').textContent = data.brightness || 100;
+
+      const recBtn = document.getElementById('recording-btn');
+      if (data.recording_active) {
+        recBtn.textContent = '⏹️ Stop Recording';
+        recBtn.classList.add('btn-danger');
+        recBtn.classList.remove('btn-secondary');
+      } else {
+        recBtn.textContent = '⏺️ Start Recording';
+        recBtn.classList.remove('btn-danger');
+        recBtn.classList.add('btn-secondary');
+      }
+
+      document.getElementById('browser-status').textContent = data.browser_running ? '🟢 Running' : '🔴 Stopped';
+      document.getElementById('browser-url').value = data.browser_url || '';
+
+      if (data.settings) {
+        settings = data.settings;
+        document.getElementById('motion-threshold').value = settings.MOTION_THRESHOLD || 1500;
+        document.getElementById('inactivity-timeout').value = settings.INACTIVITY_TIMEOUT || 60;
+        document.getElementById('check-interval').value = settings.CHECK_INTERVAL || 1;
+        document.getElementById('mqtt-host').value = settings.MQTT_HOST || '';
+        document.getElementById('mqtt-port').value = settings.MQTT_PORT || 1883;
+        document.getElementById('mqtt-prefix').value = settings.MQTT_TOPIC_PREFIX || 'wakeonpi';
+        document.getElementById('mqtt-username').value = settings.MQTT_USERNAME || '';
+        document.getElementById('mqtt-password').value = settings.MQTT_PASSWORD || '';
+        document.getElementById('dashboard-url').value = settings.HASS_DASHBOARD_URL || '';
+        document.getElementById('http-username').value = settings.HTTP_USERNAME || '';
+        document.getElementById('http-password').value = settings.HTTP_PASSWORD || '';
+        document.getElementById('backlight-path').value = settings.BACKLIGHT_PATH || '';
+        document.getElementById('brightness-path').value = settings.BRIGHTNESS_PATH || '';
+        document.getElementById('recordings-root').value = settings.RECORDINGS_ROOT || '';
+        document.getElementById('stream-resolution').value = settings.STREAM_RESOLUTION || '854x480';
+        document.getElementById('stream-fps').value = settings.STREAM_FPS || 10;
+        document.getElementById('stream-quality').value = settings.STREAM_QUALITY || 75;
+        document.getElementById('overlay-toggle').classList.toggle('active', settings.OVERLAY_ENABLED);
+        document.getElementById('overlay-time-toggle').classList.toggle('active', settings.OVERLAY_SHOW_TIME);
+        document.getElementById('overlay-stats-toggle').classList.toggle('active', settings.OVERLAY_SHOW_STATS);
+        document.getElementById('overlay-position').value = settings.OVERLAY_POSITION || 'top-right';
+        document.getElementById('service-port').value = settings.SERVICE_PORT || 5000;
+        document.getElementById('debug-toggle').classList.toggle('active', settings.DEBUG_MODE);
+      }
+    }
+
+    function formatUptime(seconds) {
+      if (!seconds) return '--';
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      if (d > 0) return d + 'd ' + h + 'h';
+      if (h > 0) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    function toggleCard(header) {
+      header.parentElement.classList.toggle('collapsed');
+    }
+
+    function send(action, data = {}) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action, ...data }));
+      }
+    }
+
+    function toggleDisplay() {
+      const isOn = document.getElementById('display-toggle').classList.contains('active');
+      send('set_display', { on: !isOn });
+    }
+
+    function setBrightness(value) {
+      send('set_brightness', { value: parseInt(value) });
+    }
+
+    function mqttReconnect() {
+      send('mqtt_reconnect');
+      showToast('Reconnecting MQTT...');
+    }
+
+    function browserRefresh() {
+      send('browser_refresh');
+      showToast('Refreshing browser...');
+    }
+
+    function toggleRecording() {
+      send('toggle_recording');
+    }
+
+    function restartServices() {
+      send('restart_services');
+      showToast('Restarting services...');
+    }
+
+    function sendNotification() {
+      const msg = document.getElementById('notify-message').value;
+      if (msg) {
+        send('notify', { message: msg, duration: 5 });
+        document.getElementById('notify-message').value = '';
+        showToast('Notification sent');
+      }
+    }
+
+    function updateSetting(key, value) {
+      send('update_settings', { settings: { [key]: value } });
+      showToast('Setting updated');
+    }
+
+    function toggleSetting(key) {
+      const current = settings[key];
+      updateSetting(key, !current);
+    }
+
+    function refreshPreview() {
+      document.getElementById('preview').src = '/snapshot?' + Date.now();
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    let logFilters = { DEBUG: true, INFO: true, WARNING: true, ERROR: true, CRITICAL: true };
+    let logRefreshInterval = null;
+
+    function openLogs() {
+      document.getElementById('log-modal').classList.add('show');
+      refreshLogs();
+      logRefreshInterval = setInterval(refreshLogs, 2000);
+    }
+
+    function closeLogs() {
+      document.getElementById('log-modal').classList.remove('show');
+      if (logRefreshInterval) {
+        clearInterval(logRefreshInterval);
+        logRefreshInterval = null;
+      }
+    }
+
+    function toggleLogFilter(btn) {
+      btn.classList.toggle('active');
+      logFilters[btn.dataset.level] = btn.classList.contains('active');
+      refreshLogs();
+    }
+
+    async function refreshLogs() {
+      try {
+        const resp = await fetch('/api/logs?limit=200');
+        const logs = await resp.json();
+        const container = document.getElementById('log-container');
+        container.innerHTML = logs
+          .filter(log => logFilters[log.level])
+          .map(log => {
+            const time = new Date(log.timestamp * 1000).toLocaleTimeString();
+            const levelClass = log.level.toLowerCase();
+            return `<div class="log-entry ${levelClass}"><span class="log-time">${time}</span><span class="log-level">${log.level}</span><span class="log-name">[${log.name}]</span> ${log.message}</div>`;
+          })
+          .join('');
+        container.scrollTop = container.scrollHeight;
+      } catch (e) {
+        console.error('Failed to fetch logs:', e);
+      }
+    }
+
+    setInterval(refreshPreview, 10000);
+    connectWebSocket();
+  </script>
 </body>
 </html>
