@@ -744,7 +744,7 @@
           <label>Beta Updates</label>
           <div class="toggle-btn" id="beta-toggle" onclick="toggleSetting('BETA_UPDATES')"></div>
         </div>
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">🧪 Beta updates include pre-release features from the staging branch</p>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px"> Beta updates include pre-release features from the staging branch</p>
         <div class="form-group" style="margin-top:16px">
           <button class="btn btn-secondary" onclick="openLogs()">📋 View Logs</button>
         </div>
@@ -903,7 +903,7 @@
       // Show version with beta indicator if it's a beta version
       const version = data.version || '--';
       const isBeta = version.includes('beta') || (data.settings && data.settings.BETA_UPDATES);
-      const versionText = isBeta && !version.includes('beta') ? `v${version} 🧪` : `v${version}`;
+      const versionText = isBeta && !version.includes('beta') ? `v${version} Beta` : `v${version}`;
       document.getElementById('version-display').textContent = versionText;
 
       if (data.system) {

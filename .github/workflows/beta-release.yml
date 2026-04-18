@@ -63,7 +63,7 @@ jobs:
           # Extract just the first line (summary) after "beta:"
           BETA_SUMMARY=$(echo "$COMMIT_MSG" | head -1 | sed 's/^beta:[[:space:]]*//')
           
-          echo "## 🧪 Beta Release v${{ steps.prepare.outputs.version }}" > changelog.md
+          echo "##  Beta Release v${{ steps.prepare.outputs.version }}" > changelog.md
           echo "" >> changelog.md
           echo "### Summary" >> changelog.md
           echo "$BETA_SUMMARY" >> changelog.md
@@ -133,9 +133,9 @@ jobs:
           TAG="v${{ steps.prepare.outputs.version }}"
           
           if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
-            TITLE="$TAG 🧪 Beta ⚠️ Breaking"
+            TITLE="$TAG  Beta ⚠️ Breaking"
           else
-            TITLE="$TAG 🧪 Beta"
+            TITLE="$TAG  Beta"
           fi
           
           gh release create "$TAG" \
