@@ -899,7 +899,12 @@
     function updateUI(data) {
       document.getElementById('mqtt-dot').classList.toggle('online', data.mqtt_connected);
       document.getElementById('mqtt-dot').classList.toggle('offline', !data.mqtt_connected);
-      document.getElementById('version-display').textContent = 'v' + (data.version || '--');
+      
+      // Show version with beta indicator if it's a beta version
+      const version = data.version || '--';
+      const isBeta = version.includes('beta') || (data.settings && data.settings.BETA_UPDATES);
+      const versionText = isBeta && !version.includes('beta') ? `v${version} 🧪` : `v${version}`;
+      document.getElementById('version-display').textContent = versionText;
 
       if (data.system) {
         const sys = data.system;
@@ -1195,7 +1200,7 @@
       }
     }
 
-    setInterval(refreshPreview, 10000);
+    // Don't auto-refresh preview - only refresh on manual button click
     connectWebSocket();
   </script>
 </body>
