@@ -362,6 +362,10 @@
             <div class="stat-value" id="uptime">--</div>
             <div class="stat-label">Uptime</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-value" id="clients">0</div>
+            <div class="stat-label">Viewers</div>
+          </div>
           <div class="stat-card" id="storage-card">
             <div class="stat-value" id="storage-free">-- GB</div>
             <div class="stat-label">Storage Free</div>
@@ -434,17 +438,37 @@
 
     <div class="card">
       <div class="card-header" onclick="toggleCard(this)">
-        <h2><span class="icon">🔔</span> Display Notifications</h2>
+        <h2><span class="icon">🔔</span> Overlay & Notifications</h2>
         <span class="chevron">▼</span>
       </div>
       <div class="card-body">
         <div class="form-group">
-          <label>Send Notification to Display</label>
+          <label>Send Notification</label>
           <div class="row">
-            <input type="text" id="notify-message" placeholder="Message to display on screen...">
+            <input type="text" id="notify-message" placeholder="Message to display...">
             <button class="btn btn-primary btn-sm" style="width:auto" onclick="sendNotification()">Send</button>
           </div>
-          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">Notifications appear on the physical display until dismissed via Home Assistant</p>
+        </div>
+        <div class="inline-toggle">
+          <label>Enable Overlay</label>
+          <div class="toggle-btn" id="overlay-toggle" onclick="toggleSetting('OVERLAY_ENABLED')"></div>
+        </div>
+        <div class="inline-toggle">
+          <label>Show Time</label>
+          <div class="toggle-btn" id="overlay-time-toggle" onclick="toggleSetting('OVERLAY_SHOW_TIME')"></div>
+        </div>
+        <div class="inline-toggle">
+          <label>Show System Stats</label>
+          <div class="toggle-btn" id="overlay-stats-toggle" onclick="toggleSetting('OVERLAY_SHOW_STATS')"></div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Position</label>
+          <select id="overlay-position" onchange="updateSetting('OVERLAY_POSITION', this.value)">
+            <option value="top-left">Top Left</option>
+            <option value="top-right">Top Right</option>
+            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-right">Bottom Right</option>
+          </select>
         </div>
       </div>
     </div>
@@ -808,9 +832,9 @@
     function sendNotification() {
       const msg = document.getElementById('notify-message').value;
       if (msg) {
-        send('display_notify', { message: msg });
+        send('notify', { message: msg, duration: 5 });
         document.getElementById('notify-message').value = '';
-        showToast('Notification sent to display');
+        showToast('Notification sent');
       }
     }
 

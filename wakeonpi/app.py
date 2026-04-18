@@ -56,6 +56,7 @@ SETTINGS_KEYS = [
     "MQTT_HOST", "MQTT_PORT", "MQTT_TOPIC_PREFIX", "MQTT_USERNAME", "MQTT_PASSWORD",
     "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT",
     "BRIGHTNESS_PATH", "BRIGHTNESS_MAX_PATH", "STREAM_RESOLUTION", "STREAM_FPS", "STREAM_QUALITY",
+    "OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "OVERLAY_POSITION",
     "SERVICE_PORT", "DEBUG_MODE"
 ]
 
@@ -67,7 +68,7 @@ def _parse_setting(key, val):
         return float(val)
     if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT"):
         return int(val)
-    if key == "DEBUG_MODE":
+    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE"):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
     if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
         return val if val != SENSITIVE_PLACEHOLDER else None
@@ -215,6 +216,7 @@ def video_feed():
             while True:
                 frame = picam2.capture_array("main")
                 frame = cv2.resize(frame, res)
+                frame = overlay.draw_overlay(frame)
                 ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
                 if ret:
                     yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n"
@@ -271,6 +273,7 @@ def snapshot():
         frame = picam2.capture_array("main")
         stream_settings = get_stream_settings()
         frame = cv2.resize(frame, stream_settings["resolution"])
+        frame = overlay.draw_overlay(frame)
         ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), stream_settings["quality"]])
         if ret:
             return Response(jpeg.tobytes(), mimetype="image/jpeg")
@@ -374,21 +377,13 @@ def api_display():
     return jsonify({"success": True})
 
 
-@app.route("/api/display/notify", methods=["POST"])
+@app.route("/api/overlay/notify", methods=["POST"])
 @requires_auth
-def api_display_notify():
+def api_overlay_notify():
     data = request.get_json()
     message = data.get("message", "")
-    overlay.set_notification(message)
-    mqtt.publish_notification(message)
-    return jsonify({"success": True})
-
-
-@app.route("/api/display/notify/clear", methods=["POST"])
-@requires_auth
-def api_display_notify_clear():
-    overlay.clear_notification()
-    mqtt.publish_notification("")
+    duration = data.get("duration", 5)
+    overlay.set_notification(message, duration)
     return jsonify({"success": True})
 
 
@@ -529,10 +524,8 @@ if WEBSOCKET_ENABLED:
                                 reconfigure_camera()
                             mqtt.restart()
                         broadcast_status()
-                    elif action == "display_notify":
-                        message = data.get("message", "")
-                        overlay.set_notification(message)
-                        mqtt.publish_notification(message)
+                    elif action == "notify":
+                        overlay.set_notification(data.get("message", ""), data.get("duration", 5))
                 except Exception:
                     pass
         except Exception:
