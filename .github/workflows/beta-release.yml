@@ -133,9 +133,9 @@ jobs:
           TAG="v${{ steps.prepare.outputs.version }}"
           
           if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
-            TITLE="$TAG ⚠️ Breaking"
+            TITLE="$TAG  Beta ⚠️ Breaking"
           else
-            TITLE="$TAG"
+            TITLE="$TAG  Beta"
           fi
           
           gh release create "$TAG" \
