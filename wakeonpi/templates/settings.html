@@ -362,10 +362,6 @@
             <div class="stat-value" id="uptime">--</div>
             <div class="stat-label">Uptime</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="clients">0</div>
-            <div class="stat-label">Viewers</div>
-          </div>
           <div class="stat-card" id="storage-card">
             <div class="stat-value" id="storage-free">-- GB</div>
             <div class="stat-label">Storage Free</div>
@@ -438,17 +434,10 @@
 
     <div class="card">
       <div class="card-header" onclick="toggleCard(this)">
-        <h2><span class="icon">🔔</span> Overlay & Notifications</h2>
+        <h2><span class="icon">🔔</span> Overlay Settings</h2>
         <span class="chevron">▼</span>
       </div>
       <div class="card-body">
-        <div class="form-group">
-          <label>Send Notification</label>
-          <div class="row">
-            <input type="text" id="notify-message" placeholder="Message to display...">
-            <button class="btn btn-primary btn-sm" style="width:auto" onclick="sendNotification()">Send</button>
-          </div>
-        </div>
         <div class="inline-toggle">
           <label>Enable Overlay</label>
           <div class="toggle-btn" id="overlay-toggle" onclick="toggleSetting('OVERLAY_ENABLED')"></div>
@@ -734,7 +723,6 @@
         storageCard.classList.toggle('danger', st.used_percent >= 90);
       }
 
-      document.getElementById('clients').textContent = data.clients_connected || 0;
       document.getElementById('display-toggle').classList.toggle('active', data.display_on);
       document.getElementById('brightness-slider').value = data.brightness || 100;
       document.getElementById('brightness-value').textContent = data.brightness || 100;
@@ -827,15 +815,6 @@
     function restartServices() {
       send('restart_services');
       showToast('Restarting services...');
-    }
-
-    function sendNotification() {
-      const msg = document.getElementById('notify-message').value;
-      if (msg) {
-        send('notify', { message: msg, duration: 5 });
-        document.getElementById('notify-message').value = '';
-        showToast('Notification sent');
-      }
     }
 
     function updateSetting(key, value) {

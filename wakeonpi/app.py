@@ -210,10 +210,10 @@ def video_feed():
             mqtt.publish_clients_connected(state.clients_connected)
         switch_to_full_mode()
         try:
-            stream_settings = get_stream_settings()
-            res = stream_settings["resolution"]
-            quality = stream_settings["quality"]
             while True:
+                stream_settings = get_stream_settings()
+                res = stream_settings["resolution"]
+                quality = stream_settings["quality"]
                 frame = picam2.capture_array("main")
                 frame = cv2.resize(frame, res)
                 frame = overlay.draw_overlay(frame)
@@ -377,16 +377,6 @@ def api_display():
     return jsonify({"success": True})
 
 
-@app.route("/api/overlay/notify", methods=["POST"])
-@requires_auth
-def api_overlay_notify():
-    data = request.get_json()
-    message = data.get("message", "")
-    duration = data.get("duration", 5)
-    overlay.set_notification(message, duration)
-    return jsonify({"success": True})
-
-
 def get_full_status():
     s = config.current_settings()
     stats = system.get_stats()
@@ -524,8 +514,6 @@ if WEBSOCKET_ENABLED:
                                 reconfigure_camera()
                             mqtt.restart()
                         broadcast_status()
-                    elif action == "notify":
-                        overlay.set_notification(data.get("message", ""), data.get("duration", 5))
                 except Exception:
                     pass
         except Exception:

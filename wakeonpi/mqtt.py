@@ -35,7 +35,6 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
-    client.subscribe(f"{prefix}/command/overlay/notify")
 
     try:
         ip = state.get_system_ip()
@@ -156,14 +155,6 @@ def _on_message(client, userdata, msg):
                 publish_brightness(val)
             except Exception:
                 log.exception("Failed to set brightness")
-
-        elif msg.topic == f"{prefix}/command/overlay/notify":
-            try:
-                from . import overlay
-                data = json.loads(payload) if payload.startswith("{") else {"message": payload}
-                overlay.set_notification(data.get("message", payload), data.get("duration", 5))
-            except Exception:
-                log.exception("Failed to set overlay notification")
 
     except Exception:
         log.exception("Error in MQTT message handler")
@@ -428,16 +419,6 @@ def _publish_ha_discovery(prefix):
             "state_topic": f"{prefix}/state/storage/used_percent",
             "unit_of_measurement": "%",
             "icon": "mdi:chart-pie",
-        }),
-        ("text", f"{prefix}_overlay_notify", {
-            "name": "Overlay Notification",
-            "command_topic": f"{prefix}/command/overlay/notify",
-            "icon": "mdi:message-alert",
-        }),
-        ("sensor", f"{prefix}_clients", {
-            "name": "Connected Clients",
-            "state_topic": f"{prefix}/state/clients_connected",
-            "icon": "mdi:account-multiple",
         }),
     ]
 

@@ -10,7 +10,7 @@ picam2 = Picamera2()
 
 def _get_stream_resolution():
     try:
-        res = config.STREAM_RESOLUTION or "854x480"
+        res = config.current_settings().get("STREAM_RESOLUTION") or "854x480"
         w, h = res.lower().split("x")
         return (int(w), int(h))
     except Exception:
@@ -18,13 +18,13 @@ def _get_stream_resolution():
 
 def _get_stream_fps():
     try:
-        return int(config.STREAM_FPS or 10)
+        return int(config.current_settings().get("STREAM_FPS") or 10)
     except Exception:
         return 10
 
 def _get_stream_quality():
     try:
-        return int(config.STREAM_QUALITY or 75)
+        return int(config.current_settings().get("STREAM_QUALITY") or 75)
     except Exception:
         return 75
 

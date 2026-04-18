@@ -1,26 +1,6 @@
-import time
 import cv2
-import numpy as np
 from datetime import datetime
 from . import state, config, system
-
-def set_notification(message, duration=5):
-    with state.overlay_lock:
-        state.overlay_message = message
-        state.overlay_expires = time.time() + duration
-
-
-def clear_notification():
-    with state.overlay_lock:
-        state.overlay_message = None
-        state.overlay_expires = 0
-
-
-def get_notification():
-    with state.overlay_lock:
-        if state.overlay_message and time.time() < state.overlay_expires:
-            return state.overlay_message
-        return None
 
 
 def draw_overlay(frame):
@@ -41,10 +21,6 @@ def draw_overlay(frame):
         lines.append(f"CPU: {stats['cpu_usage']}%  {stats['cpu_temp']}°C")
         lines.append(f"MEM: {stats['memory_percent']}%")
         lines.append(f"DISK: {stats['storage_free_gb']}GB free")
-    
-    notification = get_notification()
-    if notification:
-        lines.append(notification)
     
     if state.motion_event:
         lines.append("● MOTION")
@@ -82,8 +58,6 @@ def draw_overlay(frame):
     for i, line in enumerate(lines):
         y = y_start + padding + (i + 1) * line_height - 5
         color = (0, 255, 0) if "MOTION" in line else (255, 255, 255)
-        if notification and line == notification:
-            color = (0, 200, 255)
         cv2.putText(frame, line, (x_start + padding, y), font, font_scale, color, thickness, cv2.LINE_AA)
     
     return frame

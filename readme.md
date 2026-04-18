@@ -11,7 +11,7 @@ Key points:
 - Basic HTTP authentication protects the stream and settings pages.
 - Optional MQTT integration with auto-reconnect and full Home Assistant discovery.
 - Real-time WebSocket-based settings page with system monitoring.
-- Customizable stream overlay with time, stats, and notifications.
+- Customizable stream overlay with time and stats.
 
 ---
 
@@ -23,7 +23,7 @@ Key points:
 - Automatic display on/off using `/sys/class/backlight/10-0045/bl_power` (Touch Display 2)
 - Display brightness control (5-100%)
 - Adjustable stream resolution, FPS, and quality
-- System overlay with time, stats, and custom notifications
+- System overlay with time and stats
 - Modern WebSocket-based settings UI at `/settings` (mobile-friendly)
 - Health check endpoint at `/health` with system stats
 - Motion state endpoint at `/motion_alerts` (returns `motion` or `nomotion`)
@@ -95,7 +95,6 @@ Log in with the username and password you set.
 - `/api/status` — JSON status endpoint (protected by basic auth)
 - `/api/settings` — GET/POST settings via JSON (protected by basic auth)
 - `/api/display` — POST to control display on/off and brightness (protected by basic auth)
-- `/api/overlay/notify` — POST to send overlay notifications (protected by basic auth)
 - `/ws` — WebSocket endpoint for real-time updates
 
 ---

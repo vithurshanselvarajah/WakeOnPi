@@ -20,10 +20,6 @@ browser_override_url = None
 temp_backlight_test = None
 temp_recordings_test = None
 
-overlay_message = None
-overlay_expires = 0
-overlay_lock = threading.Lock()
-
 brightness_level = 100
 brightness_lock = threading.Lock()
 
