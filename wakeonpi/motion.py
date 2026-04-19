@@ -14,12 +14,9 @@ _motion_recording_stop_time = 0
 
 
 def _set_display_if_needed(val):
-    """Set display state based on screen control mode."""
     mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
-    
     if mode != "auto":
         return
-    
     if val != state.display_on:
         set_display(val)
         state.display_on = val
@@ -34,9 +31,7 @@ def _set_display_if_needed(val):
 
 
 def _handle_motion_recording(is_motion):
-    """Handle recording on motion with post-motion timeout."""
     global _motion_recording_stop_time
-    
     settings = config.current_settings()
     if not settings.get("RECORD_ON_MOTION", False):
         return
@@ -44,11 +39,9 @@ def _handle_motion_recording(is_motion):
         return
     if not settings.get("CAMERA_ENABLED", True):
         return
-    
     try:
         from . import recorder
         post_timeout = settings.get("RECORD_POST_MOTION_TIMEOUT", 10)
-        
         if is_motion:
             _motion_recording_stop_time = time.time() + post_timeout
             if not recorder.is_recording():
@@ -67,16 +60,13 @@ def _handle_motion_recording(is_motion):
 
 
 def _check_storage_for_recording():
-    """Check if storage allows recording based on settings."""
     settings = config.current_settings()
     max_percent = settings.get("STORAGE_MAX_PERCENT", 90)
     action = settings.get("STORAGE_FULL_ACTION", "pause")
-    
     try:
         from . import system
         storage = system.get_storage_info()
         used_percent = storage.get("used_percent", 0)
-        
         if used_percent >= max_percent:
             if action == "pause":
                 log.warning(f"Storage at {used_percent}%, pausing recording")
@@ -91,17 +81,14 @@ def _check_storage_for_recording():
 
 
 def _delete_oldest_recording():
-    """Delete the oldest recording to free up space."""
     try:
         from pathlib import Path
         recordings_root = Path(config.RECORDINGS_ROOT)
         if not recordings_root.exists():
             return
-        
         files = list(recordings_root.rglob("*.mp4"))
         if not files:
             return
-        
         oldest = min(files, key=lambda f: f.stat().st_mtime)
         oldest.unlink()
         log.info(f"Deleted oldest recording: {oldest}")
@@ -113,11 +100,9 @@ def motion_detection_loop():
     global _motion_recording_stop_time
     prev_frame = None
     state.manual_display_override = False
-
     _apply_screen_control_mode()
 
     while True:
-
         try:
             lores_frame = picam2.capture_array("lores")
         except Exception:
@@ -149,18 +134,6 @@ def motion_detection_loop():
                     if not state.motion_event:
                         state.motion_event = True
                         mqtt.publish_motion(True)
-                        url = getattr(state, "browser_override_url", None) or config.current_settings().get("HASS_DASHBOARD_URL")
-                        if url:
-                            try:
-                                current = browser.get_current_url()
-                                if current:
-                                    log.info("Browser already running (URL: %s)", current)
-                                    mqtt.publish_browser_url(current)
-                                else:
-                                    browser.show_url(url)
-                                    mqtt.publish_browser_url(url)
-                            except Exception:
-                                log.exception("Failed to show URL on browser")
                 elif time.time() - state.last_motion_time > config.INACTIVITY_TIMEOUT:
                     _set_display_if_needed(False)
                     if state.motion_event:
@@ -174,9 +147,7 @@ def motion_detection_loop():
 
 
 def _apply_screen_control_mode():
-    """Apply the screen control mode setting."""
     mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
-    
     if mode == "always_on":
         set_display(True)
         state.display_on = True
@@ -202,5 +173,4 @@ def start_motion_thread():
 
 
 def apply_screen_mode():
-    """Public function to apply screen control mode setting."""
     _apply_screen_control_mode()

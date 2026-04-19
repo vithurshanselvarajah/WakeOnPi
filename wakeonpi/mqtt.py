@@ -86,7 +86,6 @@ def _get_version():
 
 
 def _get_pi_model():
-    """Detect Raspberry Pi model from /proc/device-tree/model."""
     try:
         model_path = Path("/proc/device-tree/model")
         if model_path.exists():
