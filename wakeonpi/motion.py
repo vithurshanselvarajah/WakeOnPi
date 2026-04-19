@@ -17,7 +17,6 @@ def _set_display_if_needed(val):
     """Set display state based on screen control mode."""
     mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
     
-    # If not in auto mode, ignore motion-based display changes
     if mode != "auto":
         return
     
@@ -43,7 +42,6 @@ def _handle_motion_recording(is_motion):
         return
     if not settings.get("RECORDING_ENABLED", True):
         return
-    # Recording requires camera to be enabled
     if not settings.get("CAMERA_ENABLED", True):
         return
     
@@ -52,17 +50,14 @@ def _handle_motion_recording(is_motion):
         post_timeout = settings.get("RECORD_POST_MOTION_TIMEOUT", 10)
         
         if is_motion:
-            # Motion detected - start recording if not already, reset timeout
             _motion_recording_stop_time = time.time() + post_timeout
             if not recorder.is_recording():
-                # Check storage before starting
                 if _check_storage_for_recording():
                     ok, path = recorder.start_recording(config.RECORDINGS_ROOT)
                     if ok:
                         log.info(f"Started motion recording: {path}")
                         mqtt.publish_recording_state(True)
         else:
-            # No motion - check if we should stop recording
             if recorder.is_recording() and time.time() > _motion_recording_stop_time:
                 recorder.stop_recording()
                 log.info("Stopped motion recording (post-motion timeout)")
@@ -103,12 +98,10 @@ def _delete_oldest_recording():
         if not recordings_root.exists():
             return
         
-        # Find all mp4 files
         files = list(recordings_root.rglob("*.mp4"))
         if not files:
             return
         
-        # Sort by modification time and delete oldest
         oldest = min(files, key=lambda f: f.stat().st_mtime)
         oldest.unlink()
         log.info(f"Deleted oldest recording: {oldest}")
@@ -121,12 +114,9 @@ def motion_detection_loop():
     prev_frame = None
     state.manual_display_override = False
 
-    # Apply initial screen control mode
     _apply_screen_control_mode()
 
     while True:
-        # Motion detection always runs - it controls display and publishes motion state
-        # Only recording/streaming are affected by CAMERA_ENABLED setting
 
         try:
             lores_frame = picam2.capture_array("lores")
@@ -151,7 +141,6 @@ def motion_detection_loop():
                     state.manual_display_override = False
                     continue
 
-                # Handle motion recording
                 _handle_motion_recording(is_motion)
 
                 if is_motion:

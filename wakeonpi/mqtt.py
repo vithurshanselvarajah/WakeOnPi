@@ -61,7 +61,6 @@ def _on_connect(client, userdata, flags, rc):
         publish_state("system/version", str(version))
         global _last_version
         _last_version = str(version)
-        # Publish screen mode
         screen_mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
         publish_screen_mode(screen_mode)
     except Exception:
@@ -138,7 +137,6 @@ def _on_message(client, userdata, msg):
 
         elif msg.topic == f"{prefix}/command/recording/toggle":
             try:
-                # Check if camera and recording are enabled
                 settings = config.current_settings()
                 if not settings.get("CAMERA_ENABLED", True):
                     log.warning("Recording toggle ignored: camera is disabled")
@@ -509,7 +507,6 @@ def _publish_ha_discovery(prefix):
         }),
     ]
 
-    # Conditionally add recording entity if enabled
     if recording_enabled and camera_enabled:
         discoveries.append(("switch", f"{prefix}_recording", {
             "name": "Recording",
@@ -547,7 +544,6 @@ def publish_update_info(update_info):
     publish_state("update/breaking", "ON" if update_info.get("is_breaking", False) else "OFF")
     publish_state("update/changelog", update_info.get("changelog", ""))
     
-    # Publish JSON state for the HA update entity
     if update_info.get("available", False):
         update_state = json.dumps({
             "installed_version": update_info.get("current_version", ""),

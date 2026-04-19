@@ -545,7 +545,6 @@ if WEBSOCKET_ENABLED:
                         browser.start()
                         broadcast_status()
                     elif action == "restart_system_service":
-                        # Full system service restart via systemctl
                         try:
                             from . import updater
                             updater.restart_service()
