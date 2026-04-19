@@ -364,10 +364,11 @@ def _publish_ha_discovery(prefix):
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
-        "manufacturer": "Raspberry Pi",
+        "manufacturer": "WakeOnPi",
         "model": _get_pi_model(),
         "sw_version": str(version),
         "configuration_url": f"http://{ip}:{port}/settings",
+        "hw_version": "https://github.com/vithurshanselvarajah/WakeOnPi",
     }
 
     discoveries = [
