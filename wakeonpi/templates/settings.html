@@ -318,47 +318,6 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    .update-banner {
-      background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
-      border-radius: var(--radius);
-      padding: 16px;
-      margin-bottom: 16px;
-      display: none;
-    }
-    .update-banner.show { display: block; }
-    .update-banner.breaking {
-      background: linear-gradient(135deg, var(--warning) 0%, #d97706 100%);
-    }
-    .update-banner h3 { margin-bottom: 8px; font-size: 1.1rem; }
-    .update-banner p { font-size: 0.9rem; opacity: 0.9; margin-bottom: 12px; }
-    .update-changelog {
-      background: rgba(0,0,0,0.2);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 0.85rem;
-      max-height: 150px;
-      overflow-y: auto;
-      margin-bottom: 12px;
-      white-space: pre-wrap;
-    }
-    .update-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .update-actions .btn { width: auto; flex: 1; min-width: 120px; }
-    .btn-warning { background: var(--warning); color: #000; }
-    .btn-warning:hover { background: #d97706; }
-    .update-progress {
-      display: none;
-      align-items: center;
-      gap: 12px;
-    }
-    .update-progress.show { display: flex; }
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
@@ -380,20 +339,6 @@
         <div class="status-item" id="version-display">v--</div>
       </div>
     </header>
-
-    <div class="update-banner" id="update-banner">
-      <h3>🆕 Update Available: <span id="update-version">--</span></h3>
-      <p>Current version: <span id="current-version">--</span></p>
-      <div class="update-changelog" id="update-changelog"></div>
-      <div class="update-actions" id="update-actions">
-        <button class="btn btn-sm btn-primary" id="install-update-btn" onclick="installUpdate()">📥 Install Update</button>
-        <button class="btn btn-sm btn-secondary" onclick="dismissUpdate()">Later</button>
-      </div>
-      <div class="update-progress" id="update-progress">
-        <div class="spinner"></div>
-        <span id="update-status">Installing update...</span>
-      </div>
-    </div>
 
     <div class="card">
       <div class="card-header" onclick="toggleCard(this)">
@@ -740,16 +685,8 @@
           <label>Debug Mode</label>
           <div class="toggle-btn" id="debug-toggle" onclick="toggleSetting('DEBUG_MODE')"></div>
         </div>
-        <div class="inline-toggle">
-          <label>Beta Updates</label>
-          <div class="toggle-btn" id="beta-toggle" onclick="toggleSetting('BETA_UPDATES')"></div>
-        </div>
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px"> Beta updates include pre-release features from the staging branch</p>
         <div class="form-group" style="margin-top:16px">
           <button class="btn btn-secondary" onclick="openLogs()">📋 View Logs</button>
-        </div>
-        <div class="form-group">
-          <button class="btn btn-secondary" id="check-update-btn" onclick="checkForUpdates()">🔄 Check for Updates</button>
         </div>
       </div>
     </div>
@@ -775,8 +712,6 @@
     let ws = null;
     let reconnectTimeout = null;
     let settings = {};
-    let updateInfo = null;
-    let updateDismissed = false;
 
     function connectWebSocket() {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -800,111 +735,15 @@
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
         if (data.type === 'status') updateUI(data);
-        if (data.type === 'update_info') handleUpdateInfo(data);
-        if (data.type === 'update_result') handleUpdateResult(data);
       };
-    }
-
-    function handleUpdateInfo(data) {
-      updateInfo = data;
-      if (data.available && !updateDismissed) {
-        showUpdateBanner(data);
-      } else {
-        hideUpdateBanner();
-      }
-    }
-
-    function handleUpdateResult(data) {
-      const progress = document.getElementById('update-progress');
-      const status = document.getElementById('update-status');
-      
-      if (data.success) {
-        status.textContent = '✅ Update installed! Restarting...';
-        setTimeout(() => {
-          showToast('Update complete. Page will reload...');
-          setTimeout(() => location.reload(), 3000);
-        }, 2000);
-      } else {
-        progress.classList.remove('show');
-        document.getElementById('update-actions').style.display = 'flex';
-        showToast('Update failed: ' + (data.error || 'Unknown error'));
-      }
-    }
-
-    function showUpdateBanner(data) {
-      const banner = document.getElementById('update-banner');
-      const isBreaking = data.is_breaking;
-      
-      document.getElementById('update-version').textContent = 'v' + data.latest_version;
-      document.getElementById('current-version').textContent = 'v' + data.current_version;
-      document.getElementById('update-changelog').textContent = data.changelog || 'No changelog available';
-      
-      banner.classList.toggle('breaking', isBreaking);
-      banner.classList.add('show');
-      
-      const installBtn = document.getElementById('install-update-btn');
-      if (isBreaking) {
-        installBtn.textContent = '⚠️ Manual Update Required';
-        installBtn.classList.remove('btn-primary');
-        installBtn.classList.add('btn-warning');
-        installBtn.onclick = () => {
-          showToast('Breaking changes detected. Please update manually via SSH.');
-        };
-      } else {
-        installBtn.textContent = '📥 Install Update';
-        installBtn.classList.add('btn-primary');
-        installBtn.classList.remove('btn-warning');
-        installBtn.onclick = installUpdate;
-      }
-    }
-
-    function hideUpdateBanner() {
-      document.getElementById('update-banner').classList.remove('show');
-    }
-
-    function dismissUpdate() {
-      updateDismissed = true;
-      hideUpdateBanner();
-    }
-
-    function checkForUpdates() {
-      const btn = document.getElementById('check-update-btn');
-      btn.textContent = '🔄 Checking...';
-      btn.disabled = true;
-      
-      send('check_update');
-      
-      setTimeout(() => {
-        btn.textContent = '🔄 Check for Updates';
-        btn.disabled = false;
-        if (!updateInfo || !updateInfo.available) {
-          showToast('You are running the latest version');
-        }
-      }, 3000);
-    }
-
-    function installUpdate() {
-      if (updateInfo && updateInfo.is_breaking) {
-        showToast('Breaking changes detected. Please update manually.');
-        return;
-      }
-      
-      document.getElementById('update-actions').style.display = 'none';
-      document.getElementById('update-progress').classList.add('show');
-      document.getElementById('update-status').textContent = 'Installing update...';
-      
-      send('install_update');
     }
 
     function updateUI(data) {
       document.getElementById('mqtt-dot').classList.toggle('online', data.mqtt_connected);
       document.getElementById('mqtt-dot').classList.toggle('offline', !data.mqtt_connected);
       
-      // Show version with beta indicator if it's a beta version
       const version = data.version || '--';
-      const isBeta = version.includes('beta') || (data.settings && data.settings.BETA_UPDATES);
-      const versionText = isBeta && !version.includes('beta') ? `v${version} Beta` : `v${version}`;
-      document.getElementById('version-display').textContent = versionText;
+      document.getElementById('version-display').textContent = `v${version}`;
 
       if (data.system) {
         const sys = data.system;
@@ -977,9 +816,7 @@
         document.getElementById('overlay-position').value = settings.OVERLAY_POSITION || 'top-right';
         document.getElementById('service-port').value = settings.SERVICE_PORT || 5000;
         document.getElementById('debug-toggle').classList.toggle('active', settings.DEBUG_MODE);
-        document.getElementById('beta-toggle').classList.toggle('active', settings.BETA_UPDATES);
 
-        // New settings
         document.getElementById('camera-toggle').classList.toggle('active', settings.CAMERA_ENABLED !== false);
         document.getElementById('recording-toggle').classList.toggle('active', settings.RECORDING_ENABLED !== false);
         document.getElementById('record-motion-toggle').classList.toggle('active', settings.RECORD_ON_MOTION);
@@ -988,13 +825,7 @@
         document.getElementById('storage-action').value = settings.STORAGE_FULL_ACTION || 'pause';
         document.getElementById('screen-mode').value = settings.SCREEN_CONTROL_MODE || 'auto';
 
-        // Update feature visibility
         updateFeatureVisibility(settings);
-      }
-
-      // Handle update info from status
-      if (data.update && !updateDismissed) {
-        handleUpdateInfo(data.update);
       }
     }
 
