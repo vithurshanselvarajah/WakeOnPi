@@ -39,6 +39,10 @@ mqtt.start()
 try:
     log.info("Starting browser service")
     browser.start()
+    url = config.current_settings().get("HASS_DASHBOARD_URL")
+    if url:
+        browser.show_url(url)
+        log.info(f"Browser launched with URL: {url}")
 except Exception:
     log.error("Failed to start browser service")
 
