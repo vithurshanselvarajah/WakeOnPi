@@ -36,7 +36,6 @@ DEFAULTS = {
     "STORAGE_MAX_PERCENT": 90,
     "STORAGE_FULL_ACTION": "pause",
     "SCREEN_CONTROL_MODE": "auto",
-    "BETA_UPDATES": False,
 }
 
 

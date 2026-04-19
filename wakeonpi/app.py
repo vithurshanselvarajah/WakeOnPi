@@ -14,7 +14,7 @@ setup_logging(config.DEBUG_MODE)
 import logging
 log = logging.getLogger("App")
 
-from . import state, mqtt, browser, recorder, system, overlay, updater
+from . import state, mqtt, browser, recorder, system, overlay
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed, get_stream_settings, reconfigure as reconfigure_camera
 from .auth import requires_auth
 from .motion import start_motion_thread
@@ -36,18 +36,27 @@ log.info("Starting system stats service")
 system.start()
 log.info("Starting MQTT service")
 mqtt.start()
+log.info("Starting browser service")
 try:
-    log.info("Starting browser service")
     browser.start()
 except Exception:
-    log.error("Failed to start browser service")
+    log.exception("Failed to start browser service")
+
+def _launch_browser_async():
+    try:
+        url = config.current_settings().get("HASS_DASHBOARD_URL")
+        if url:
+            import time
+            time.sleep(2)
+            browser.show_url(url)
+            log.info(f"Browser launched with URL: {url}")
+    except Exception:
+        log.exception("Failed to launch browser URL")
+
+threading.Thread(target=_launch_browser_async, daemon=True).start()
 
 start_motion_thread()
 _stats_broadcast_thread = None
-
-updater.check_for_updates_async()
-updater.start_update_scheduler()
-log.info("Update check initiated")
 
 
 host = state.get_system_ip()
@@ -61,7 +70,7 @@ SETTINGS_KEYS = [
     "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT",
     "BRIGHTNESS_PATH", "BRIGHTNESS_MAX_PATH", "STREAM_RESOLUTION", "STREAM_FPS", "STREAM_QUALITY",
     "OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "OVERLAY_POSITION",
-    "SERVICE_PORT", "DEBUG_MODE", "BETA_UPDATES",
+    "SERVICE_PORT", "DEBUG_MODE",
     "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "RECORD_POST_MOTION_TIMEOUT",
     "STORAGE_MAX_PERCENT", "STORAGE_FULL_ACTION", "SCREEN_CONTROL_MODE"
 ]
@@ -75,7 +84,7 @@ def _parse_setting(key, val):
     if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT", "RECORD_POST_MOTION_TIMEOUT", "STORAGE_MAX_PERCENT"):
         return int(val)
     if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE", 
-               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "BETA_UPDATES"):
+               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION"):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
     if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
         return val if val != SENSITIVE_PLACEHOLDER else None
@@ -392,36 +401,6 @@ def api_display():
     return jsonify({"success": True})
 
 
-@app.route("/api/update/check", methods=["POST"])
-@requires_auth
-def api_update_check():
-    info = updater.check_for_updates()
-    mqtt.publish_update_info(info)
-    return jsonify(info)
-
-
-@app.route("/api/update/info")
-@requires_auth
-def api_update_info():
-    return jsonify(updater.get_update_info())
-
-
-@app.route("/api/update/install", methods=["POST"])
-@requires_auth
-def api_update_install():
-    info = updater.get_update_info()
-    if info.get("breaking"):
-        return jsonify({
-            "success": False,
-            "error": f"Breaking changes detected. New packages required: {', '.join(info.get('new_packages', []))}. Please update manually."
-        }), 400
-    
-    success, message = updater.perform_update()
-    if success:
-        mqtt.publish_update_info(updater.get_update_info())
-    return jsonify({"success": success, "message": message})
-
-
 def get_full_status():
     s = config.current_settings()
     stats = system.get_stats()
@@ -457,7 +436,6 @@ def get_full_status():
         "system": stats,
         "storage": storage,
         "settings": settings_safe,
-        "update": updater.get_update_info(),
     }
 
 
@@ -547,8 +525,13 @@ if WEBSOCKET_ENABLED:
                         broadcast_status()
                     elif action == "restart_system_service":
                         try:
-                            from . import updater
-                            updater.restart_service()
+                            import subprocess
+                            subprocess.run(
+                                ["sudo", "systemctl", "restart", "wakeonpi"],
+                                capture_output=True,
+                                text=True,
+                                timeout=30
+                            )
                         except Exception:
                             log.exception("Failed to restart system service")
                         broadcast_status()
@@ -573,28 +556,6 @@ if WEBSOCKET_ENABLED:
                                 mqtt.publish_screen_mode(updates["SCREEN_CONTROL_MODE"])
                             mqtt.restart()
                         broadcast_status()
-                    elif action == "check_update":
-                        info = updater.check_for_updates()
-                        mqtt.publish_update_info(info)
-                        broadcast_status()
-                    elif action == "install_update":
-                        info = updater.get_update_info()
-                        if info.get("breaking"):
-                            ws.send(json.dumps({
-                                "type": "update_result",
-                                "success": False,
-                                "error": f"Breaking changes detected. New packages: {', '.join(info.get('new_packages', []))}. Update manually."
-                            }))
-                        else:
-                            success, message = updater.perform_update()
-                            ws.send(json.dumps({
-                                "type": "update_result",
-                                "success": success,
-                                "message": message
-                            }))
-                            if success:
-                                mqtt.publish_update_info(updater.get_update_info())
-                            broadcast_status()
                 except Exception:
                     pass
         except Exception:

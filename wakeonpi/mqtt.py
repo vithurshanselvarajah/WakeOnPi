@@ -36,8 +36,6 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
-    client.subscribe(f"{prefix}/command/update/check")
-    client.subscribe(f"{prefix}/command/update/install")
 
     try:
         ip = state.get_system_ip()
@@ -67,14 +65,6 @@ def _on_connect(client, userdata, flags, rc):
         log.exception("Failed to publish system info")
 
     try:
-        from . import updater
-        update_info = updater.get_update_info()
-        if update_info.get("current_version"):
-            publish_update_info(update_info)
-    except Exception:
-        log.exception("Failed to publish update info")
-
-    try:
         _publish_ha_discovery(prefix)
     except Exception:
         log.exception("Failed to publish HA discovery")
@@ -96,7 +86,6 @@ def _get_version():
 
 
 def _get_pi_model():
-    """Detect Raspberry Pi model from /proc/device-tree/model."""
     try:
         model_path = Path("/proc/device-tree/model")
         if model_path.exists():
@@ -202,41 +191,12 @@ def _on_message(client, userdata, msg):
             except Exception:
                 log.exception("Failed to set screen mode")
 
-        elif msg.topic == f"{prefix}/command/update/check":
-            try:
-                from . import updater
-                info = updater.check_for_updates()
-                publish_update_info(info)
-            except Exception:
-                log.exception("Failed to check for updates")
-
-        elif msg.topic == f"{prefix}/command/update/install":
-            try:
-                from . import updater
-                info = updater.get_update_info()
-                if info.get("breaking"):
-                    log.warning("Cannot auto-update: breaking changes detected")
-                    publish_state("update/result", json.dumps({
-                        "success": False,
-                        "error": f"Breaking changes. New packages: {', '.join(info.get('new_packages', []))}"
-                    }))
-                else:
-                    success, message = updater.perform_update()
-                    publish_state("update/result", json.dumps({
-                        "success": success,
-                        "message": message
-                    }))
-                    if success:
-                        publish_update_info(updater.get_update_info())
-            except Exception:
-                log.exception("Failed to install update")
-
     except Exception:
         log.exception("Error in MQTT message handler")
 
 
 def _reconnect_loop():
-    global _reconnect_delay
+    global _reconnect_delay, _client, _connected
     while not _stop_reconnect.is_set():
         if _connected:
             break
@@ -245,12 +205,32 @@ def _reconnect_loop():
         if _stop_reconnect.is_set():
             break
         try:
-            if _client and not _connected:
-                cfg = config.current_settings()
-                host = cfg.get("MQTT_HOST") or "localhost"
-                port = int(cfg.get("MQTT_PORT") or 1883)
-                _client.reconnect()
-                _reconnect_delay = 5
+            if _client:
+                try:
+                    _client.disconnect()
+                except Exception:
+                    pass
+                _client = None
+            
+            cfg = config.current_settings()
+            host = cfg.get("MQTT_HOST")
+            if not host:
+                log.info("MQTT host not configured")
+                break
+            
+            port = int(cfg.get("MQTT_PORT") or 1883)
+            _client = mqtt.Client()
+            if cfg.get("MQTT_USERNAME"):
+                _client.username_pw_set(cfg.get("MQTT_USERNAME"), cfg.get("MQTT_PASSWORD"))
+            _client.on_connect = _on_connect
+            _client.on_message = _on_message
+            _client.on_disconnect = _on_disconnect
+            
+            log.info(f"Reconnecting to MQTT {host}:{port}")
+            _client.connect(host, port)
+            threading.Thread(target=_client.loop_forever, daemon=True).start()
+            _reconnect_delay = 5
+            break
         except Exception:
             log.exception("MQTT reconnect failed")
             _reconnect_delay = min(_reconnect_delay * 2, _max_reconnect_delay)
@@ -300,8 +280,8 @@ def start():
         threading.Thread(target=_client.loop_forever, daemon=True).start()
     except Exception:
         log.exception("MQTT connect error")
-        _client = None
         _connected = False
+        _start_reconnect_thread()
 
 
 def stop():
@@ -404,10 +384,11 @@ def _publish_ha_discovery(prefix):
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",
-        "manufacturer": "Raspberry Pi",
+        "manufacturer": "WakeOnPi",
         "model": _get_pi_model(),
         "sw_version": str(version),
         "configuration_url": f"http://{ip}:{port}/settings",
+        "hw_version": "https://github.com/vithurshanselvarajah/WakeOnPi",
     }
 
     discoveries = [
@@ -505,14 +486,6 @@ def _publish_ha_discovery(prefix):
             "unit_of_measurement": "%",
             "icon": "mdi:chart-pie",
         }),
-        ("binary_sensor", f"{prefix}_update_available", {
-            "name": "Update Available",
-            "device_class": "update",
-            "state_topic": f"{prefix}/state/update/available",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:package-up",
-        }),
     ]
 
     if recording_enabled and camera_enabled:
@@ -539,31 +512,3 @@ def _publish_ha_discovery(prefix):
 
 def publish_clients_connected(count):
     publish_state("clients_connected", str(count))
-
-
-def publish_update_info(update_info):
-    """Publish update information to MQTT."""
-    if update_info is None:
-        return
-    
-    publish_state("update/available", "ON" if update_info.get("available", False) else "OFF")
-    publish_state("update/latest_version", update_info.get("latest_version", ""))
-    publish_state("update/current_version", update_info.get("current_version", ""))
-    publish_state("update/breaking", "ON" if update_info.get("is_breaking", False) else "OFF")
-    publish_state("update/changelog", update_info.get("changelog", ""))
-    
-    if update_info.get("available", False):
-        update_state = json.dumps({
-            "installed_version": update_info.get("current_version", ""),
-            "latest_version": update_info.get("latest_version", ""),
-            "release_summary": update_info.get("changelog", ""),
-            "release_url": f"https://github.com/vithuselern/wakeonpi/releases/tag/v{update_info.get('latest_version', '')}",
-            "in_progress": False,
-        })
-    else:
-        update_state = json.dumps({
-            "installed_version": update_info.get("current_version", ""),
-            "latest_version": update_info.get("current_version", ""),
-            "in_progress": False,
-        })
-    publish_state("update/state", update_state)
