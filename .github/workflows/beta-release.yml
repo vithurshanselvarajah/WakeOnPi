@@ -1,0 +1,138 @@
+name: Beta Release Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+      - 'feature/**'
+
+jobs:
+  create-beta-release:
+    if: ${{ startsWith(github.event.head_commit.message, 'beta:') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version and prepare beta
+        id: prepare
+        run: |
+          BASE_VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
+          
+          BETA_SUFFIX="beta.$(date +%Y%m%d%H%M)"
+          VERSION="${BASE_VERSION}-${BETA_SUFFIX}"
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          
+          if git diff origin/staging...HEAD --name-only 2>/dev/null | grep -q "requirements.txt"; then
+            CURRENT_REQS=$(cat requirements.txt | sort)
+            git show origin/staging:requirements.txt > /tmp/staging_requirements.txt 2>/dev/null || echo "" > /tmp/staging_requirements.txt
+            STAGING_REQS=$(cat /tmp/staging_requirements.txt | sort)
+            
+            CURRENT_PKGS=$(echo "$CURRENT_REQS" | sed 's/[=<>!].*//' | sort -u)
+            STAGING_PKGS=$(echo "$STAGING_REQS" | sed 's/[=<>!].*//' | sort -u)
+            
+            NEW_PKGS=$(comm -23 <(echo "$CURRENT_PKGS") <(echo "$STAGING_PKGS") | tr '\n' ',' | sed 's/,$//')
+            if [ -n "$NEW_PKGS" ]; then
+              echo "breaking=true" >> $GITHUB_OUTPUT
+              echo "new_packages=$NEW_PKGS" >> $GITHUB_OUTPUT
+            else
+              echo "breaking=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "breaking=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          BETA_SUMMARY=$(echo "$COMMIT_MSG" | head -1 | sed 's/^beta:[[:space:]]*//')
+          
+          echo "##  Beta Release v${{ steps.prepare.outputs.version }}" > changelog.md
+          echo "" >> changelog.md
+          echo "### Summary" >> changelog.md
+          echo "$BETA_SUMMARY" >> changelog.md
+          echo "" >> changelog.md
+          echo "> ⚠️ This is a pre-release version for testing. Enable 'Beta Updates' in settings to receive this update." >> changelog.md
+          echo "" >> changelog.md
+          
+          if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
+            echo "### ⚠️ Breaking Changes" >> changelog.md
+            echo "This release includes new dependencies that require manual installation:" >> changelog.md
+            echo '```' >> changelog.md
+            echo "${{ steps.prepare.outputs.new_packages }}" >> changelog.md
+            echo '```' >> changelog.md
+            echo "Run \`pip install -r requirements.txt\` after updating." >> changelog.md
+            echo "" >> changelog.md
+          fi
+          
+          echo "### Changes" >> changelog.md
+          if git rev-parse origin/staging >/dev/null 2>&1; then
+            git log origin/staging..HEAD --pretty=format:"- %s" --no-merges >> changelog.md || git log -20 --pretty=format:"- %s" --no-merges >> changelog.md
+          else
+            git log -20 --pretty=format:"- %s" --no-merges >> changelog.md
+          fi
+          echo "" >> changelog.md
+          
+          cat changelog.md
+          
+          CHANGELOG_CONTENT=$(cat changelog.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Merge to staging
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if ! git rev-parse --verify origin/staging >/dev/null 2>&1; then
+            git checkout -b staging
+            git push origin staging
+          else
+            git checkout staging
+            git pull origin staging
+          fi
+          
+          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}" -X theirs || {
+            git checkout --theirs .
+            git add .
+            git commit -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}"
+          }
+          git push origin staging
+
+      - name: Update version in staging
+        run: |
+          sed -i "s/^version = .*/version = \"${{ steps.prepare.outputs.version }}\"/" pyproject.toml
+          git add pyproject.toml
+          git commit -m "chore: bump version to ${{ steps.prepare.outputs.version }}" || true
+          git push origin staging
+
+      - name: Create GitHub Pre-Release
+        run: |
+          TAG="v${{ steps.prepare.outputs.version }}"
+          
+          if [ "${{ steps.prepare.outputs.breaking }}" == "true" ]; then
+            TITLE="$TAG  Beta ⚠️ Breaking"
+          else
+            TITLE="$TAG  Beta"
+          fi
+          
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes-file changelog.md \
+            --target staging \
+            --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

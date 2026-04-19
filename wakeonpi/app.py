@@ -60,7 +60,7 @@ SETTINGS_KEYS = [
     "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT",
     "BRIGHTNESS_PATH", "BRIGHTNESS_MAX_PATH", "STREAM_RESOLUTION", "STREAM_FPS", "STREAM_QUALITY",
     "OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "OVERLAY_POSITION",
-    "SERVICE_PORT", "DEBUG_MODE",
+    "SERVICE_PORT", "DEBUG_MODE", "BETA_UPDATES",
     "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "RECORD_POST_MOTION_TIMEOUT",
     "STORAGE_MAX_PERCENT", "STORAGE_FULL_ACTION", "SCREEN_CONTROL_MODE"
 ]
@@ -74,7 +74,7 @@ def _parse_setting(key, val):
     if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT", "RECORD_POST_MOTION_TIMEOUT", "STORAGE_MAX_PERCENT"):
         return int(val)
     if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE", 
-               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION"):
+               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "BETA_UPDATES"):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
     if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
         return val if val != SENSITIVE_PLACEHOLDER else None
@@ -543,6 +543,13 @@ if WEBSOCKET_ENABLED:
                         mqtt.restart()
                         browser.stop()
                         browser.start()
+                        broadcast_status()
+                    elif action == "restart_system_service":
+                        try:
+                            from . import updater
+                            updater.restart_service()
+                        except Exception:
+                            log.exception("Failed to restart system service")
                         broadcast_status()
                     elif action == "update_settings":
                         updates = {}

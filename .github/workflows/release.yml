@@ -21,7 +21,8 @@ jobs:
       - name: Extract version and detect breaking changes
         id: prepare
         run: |
-          VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
+          RAW_VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
+          VERSION=$(echo "$RAW_VERSION" | sed 's/-beta.*//')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
@@ -97,8 +98,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          sed -i "s/^version = .*/version = \"${{ steps.prepare.outputs.version }}\"/" pyproject.toml
+          git add pyproject.toml
+          git commit -m "chore: set release version ${{ steps.prepare.outputs.version }}" || true
+          
           git checkout main
-          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}"
+          git pull origin main
+          
+          git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}" -X theirs || {
+            git checkout --theirs .
+            git add .
+            git commit -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}"
+          }
           git push origin main
 
       - name: Create GitHub Release
@@ -117,3 +129,13 @@ jobs:
             --target main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync staging and develop with main
+        run: |
+          git checkout staging
+          git merge main -m "Sync with main after release v${{ steps.prepare.outputs.version }}"
+          git push origin staging
+          
+          git checkout develop
+          git merge main -m "Sync with main after release v${{ steps.prepare.outputs.version }}"
+          git push origin develop
