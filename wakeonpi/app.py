@@ -46,6 +46,7 @@ start_motion_thread()
 _stats_broadcast_thread = None
 
 updater.check_for_updates_async()
+updater.start_update_scheduler()
 log.info("Update check initiated")
 
 

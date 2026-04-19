@@ -67,6 +67,14 @@ def _on_connect(client, userdata, flags, rc):
         log.exception("Failed to publish system info")
 
     try:
+        from . import updater
+        update_info = updater.get_update_info()
+        if update_info.get("current_version"):
+            publish_update_info(update_info)
+    except Exception:
+        log.exception("Failed to publish update info")
+
+    try:
         _publish_ha_discovery(prefix)
     except Exception:
         log.exception("Failed to publish HA discovery")

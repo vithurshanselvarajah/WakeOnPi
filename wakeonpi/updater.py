@@ -106,7 +106,11 @@ def check_for_updates():
         
         req = urllib.request.Request(
             api_url,
-            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "WakeOnPi"}
+            headers={
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "WakeOnPi",
+                "Cache-Control": "no-cache",
+            }
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
@@ -285,8 +289,52 @@ def restart_service():
         log.exception(f"Failed to restart service: {e}")
 
 
+UPDATE_CHECK_INTERVAL = 86400
+_scheduler_thread = None
+_stop_scheduler = threading.Event()
+
+
+def _update_check_scheduler():
+    while not _stop_scheduler.is_set():
+        _stop_scheduler.wait(UPDATE_CHECK_INTERVAL)
+        if _stop_scheduler.is_set():
+            break
+        log.info("Running scheduled update check...")
+        try:
+            info = check_for_updates()
+            try:
+                from . import mqtt
+                mqtt.publish_update_info(info)
+            except Exception:
+                log.exception("Failed to publish update info to MQTT")
+        except Exception:
+            log.exception("Scheduled update check failed")
+
+
+def start_update_scheduler():
+    global _scheduler_thread
+    if _scheduler_thread is not None and _scheduler_thread.is_alive():
+        return
+    _stop_scheduler.clear()
+    _scheduler_thread = threading.Thread(target=_update_check_scheduler, daemon=True)
+    _scheduler_thread.start()
+    log.info(f"Update scheduler started (interval: {UPDATE_CHECK_INTERVAL}s)")
+
+
+def stop_update_scheduler():
+    _stop_scheduler.set()
+
+
 def check_for_updates_async():
-    thread = threading.Thread(target=check_for_updates, daemon=True)
+    def _check_and_publish():
+        info = check_for_updates()
+        try:
+            from . import mqtt
+            mqtt.publish_update_info(info)
+        except Exception:
+            log.exception("Failed to publish update info to MQTT")
+    
+    thread = threading.Thread(target=_check_and_publish, daemon=True)
     thread.start()
 
 
