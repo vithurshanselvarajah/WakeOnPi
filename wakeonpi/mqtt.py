@@ -209,7 +209,11 @@ def _reconnect_loop():
                 cfg = config.current_settings()
                 host = cfg.get("MQTT_HOST") or "localhost"
                 port = int(cfg.get("MQTT_PORT") or 1883)
-                _client.reconnect()
+                try:
+                    _client.reconnect()
+                except Exception:
+                    _client.connect(host, port)
+                    threading.Thread(target=_client.loop_forever, daemon=True).start()
                 _reconnect_delay = 5
         except Exception:
             log.exception("MQTT reconnect failed")
@@ -260,8 +264,8 @@ def start():
         threading.Thread(target=_client.loop_forever, daemon=True).start()
     except Exception:
         log.exception("MQTT connect error")
-        _client = None
         _connected = False
+        _start_reconnect_thread()
 
 
 def stop():
