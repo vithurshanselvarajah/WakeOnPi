@@ -22,10 +22,8 @@ jobs:
       - name: Extract version and prepare beta
         id: prepare
         run: |
-          # Get base version from pyproject.toml
           BASE_VERSION=$(grep -m 1 '^version = ' pyproject.toml | tr -d '"' | tr -d ' ' | cut -d "=" -f 2)
           
-          # Generate beta version with timestamp
           BETA_SUFFIX="beta.$(date +%Y%m%d%H%M)"
           VERSION="${BASE_VERSION}-${BETA_SUFFIX}"
           
@@ -35,7 +33,6 @@ jobs:
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           
-          # Check for new packages compared to staging
           if git diff origin/staging...HEAD --name-only 2>/dev/null | grep -q "requirements.txt"; then
             CURRENT_REQS=$(cat requirements.txt | sort)
             git show origin/staging:requirements.txt > /tmp/staging_requirements.txt 2>/dev/null || echo "" > /tmp/staging_requirements.txt
@@ -60,7 +57,6 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          # Extract just the first line (summary) after "beta:"
           BETA_SUMMARY=$(echo "$COMMIT_MSG" | head -1 | sed 's/^beta:[[:space:]]*//')
           
           echo "##  Beta Release v${{ steps.prepare.outputs.version }}" > changelog.md
@@ -82,7 +78,6 @@ jobs:
           fi
           
           echo "### Changes" >> changelog.md
-          # Get changes since last staging merge or last 20 commits
           if git rev-parse origin/staging >/dev/null 2>&1; then
             git log origin/staging..HEAD --pretty=format:"- %s" --no-merges >> changelog.md || git log -20 --pretty=format:"- %s" --no-merges >> changelog.md
           else
@@ -102,7 +97,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Create staging branch if it doesn't exist
           if ! git rev-parse --verify origin/staging >/dev/null 2>&1; then
             git checkout -b staging
             git push origin staging
@@ -111,9 +105,7 @@ jobs:
             git pull origin staging
           fi
           
-          # Merge the source branch, accepting theirs for conflicts (develop takes priority)
           git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}" -X theirs || {
-            # If merge still fails, force resolve conflicts by taking develop's version
             git checkout --theirs .
             git add .
             git commit -m "Merge ${{ steps.prepare.outputs.branch }} for beta v${{ steps.prepare.outputs.version }}"
@@ -122,7 +114,6 @@ jobs:
 
       - name: Update version in staging
         run: |
-          # Update pyproject.toml with beta version
           sed -i "s/^version = .*/version = \"${{ steps.prepare.outputs.version }}\"/" pyproject.toml
           git add pyproject.toml
           git commit -m "chore: bump version to ${{ steps.prepare.outputs.version }}" || true

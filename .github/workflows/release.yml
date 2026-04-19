@@ -100,9 +100,7 @@ jobs:
           git checkout main
           git pull origin main
           
-          # Merge the source branch, accepting theirs for conflicts (source branch takes priority)
           git merge --no-ff ${{ steps.prepare.outputs.branch }} -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}" -X theirs || {
-            # If merge still fails, force resolve conflicts by taking source branch's version
             git checkout --theirs .
             git add .
             git commit -m "Merge ${{ steps.prepare.outputs.branch }} for release v${{ steps.prepare.outputs.version }}"

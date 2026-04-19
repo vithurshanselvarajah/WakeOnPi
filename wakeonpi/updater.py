@@ -99,12 +99,9 @@ def check_for_updates():
         settings = config.current_settings()
         is_beta = settings.get("BETA_UPDATES", False)
         
-        # Use different API endpoint for beta vs stable
         if is_beta:
-            # Get all releases including prereleases
             api_url = GITHUB_RELEASES_URL
         else:
-            # Get only latest stable release
             api_url = GITHUB_API_URL
         
         req = urllib.request.Request(
@@ -114,11 +111,8 @@ def check_for_updates():
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
         
-        # For beta, find latest release (including prereleases)
-        # For stable, data is already the latest stable release
         if is_beta:
             if isinstance(data, list) and len(data) > 0:
-                # Get the first release (most recent)
                 release = data[0]
             else:
                 raise ValueError("No releases found")
@@ -130,7 +124,24 @@ def check_for_updates():
         changelog = release.get("body", "No changelog available.")
         is_prerelease = release.get("prerelease", False)
         
-        is_newer = pkg_version.parse(latest) > pkg_version.parse(current)
+        current_parsed = pkg_version.parse(current)
+        latest_parsed = pkg_version.parse(latest)
+        
+        if is_beta and is_prerelease:
+            current_base = current.split("-")[0] if "-" in current else current
+            latest_base = latest.split("-")[0] if "-" in latest else latest
+            
+            current_base_parsed = pkg_version.parse(current_base)
+            latest_base_parsed = pkg_version.parse(latest_base)
+            
+            if latest_base_parsed > current_base_parsed:
+                is_newer = True
+            elif latest_base_parsed == current_base_parsed:
+                is_newer = latest != current and latest_parsed != current_parsed
+            else:
+                is_newer = False
+        else:
+            is_newer = latest_parsed > current_parsed
         
         new_packages = []
         if is_newer:
@@ -208,16 +219,13 @@ def perform_update():
         
         log.info(f"Update target: branch={target_branch}, beta_mode={is_beta}")
         
-        # Fetch latest from origin
         _run_git_command("fetch", "origin", target_branch)
         
-        # Stash any local changes
         try:
             _run_git_command("stash", "push", "-m", "WakeOnPi auto-update stash")
         except Exception:
-            log.debug("No local changes to stash")
+            pass
         
-        # Checkout and pull the target branch
         try:
             _run_git_command("checkout", target_branch)
             _run_git_command("reset", "--hard", f"origin/{target_branch}")
@@ -229,11 +237,10 @@ def perform_update():
                 pass
             raise
         
-        # Try to restore stashed changes
         try:
             _run_git_command("stash", "pop")
         except Exception:
-            log.debug("No stash to pop or conflicts")
+            pass
         
         with _lock:
             _update_info["updating"] = False
@@ -242,7 +249,6 @@ def perform_update():
         
         log.info("Update completed successfully. Restarting service...")
         
-        # Restart the service
         restart_service()
         
         return True, "Update completed. Service is restarting."
@@ -262,7 +268,6 @@ def perform_update():
 
 
 def restart_service():
-    """Restart the WakeOnPi service using systemctl."""
     try:
         log.info("Restarting WakeOnPi service...")
         result = subprocess.run(

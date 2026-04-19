@@ -1,7 +1,6 @@
 import logging
 from . import state
 
-# Paths to filter from werkzeug logs (noisy endpoints)
 FILTERED_PATHS = ['/api/logs', '/snapshot']
 
 
@@ -10,12 +9,11 @@ class FilteredLogHandler(logging.Handler):
     
     def emit(self, record):
         try:
-            # Filter werkzeug logs for specific endpoints
             if record.name == 'werkzeug':
                 msg = record.getMessage()
                 for path in FILTERED_PATHS:
                     if path in msg:
-                        return  # Skip this log entry
+                        return
             
             level = record.levelname
             name = record.name
@@ -30,12 +28,11 @@ class FilteredConsoleHandler(logging.StreamHandler):
     
     def emit(self, record):
         try:
-            # Filter werkzeug logs for specific endpoints
             if record.name == 'werkzeug':
                 msg = record.getMessage()
                 for path in FILTERED_PATHS:
                     if path in msg:
-                        return  # Skip this log entry
+                        return
             super().emit(record)
         except Exception:
             pass
