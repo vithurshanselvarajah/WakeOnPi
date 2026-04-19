@@ -229,6 +229,7 @@ def perform_update():
         try:
             _run_git_command("checkout", target_branch)
             _run_git_command("reset", "--hard", f"origin/{target_branch}")
+            _run_git_command("pull", "origin", target_branch)
         except Exception as e:
             log.error(f"Failed to checkout {target_branch}: {e}")
             try:
