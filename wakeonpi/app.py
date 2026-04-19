@@ -36,15 +36,24 @@ log.info("Starting system stats service")
 system.start()
 log.info("Starting MQTT service")
 mqtt.start()
+log.info("Starting browser service")
 try:
-    log.info("Starting browser service")
     browser.start()
-    url = config.current_settings().get("HASS_DASHBOARD_URL")
-    if url:
-        browser.show_url(url)
-        log.info(f"Browser launched with URL: {url}")
 except Exception:
-    log.error("Failed to start browser service")
+    log.exception("Failed to start browser service")
+
+def _launch_browser_async():
+    try:
+        url = config.current_settings().get("HASS_DASHBOARD_URL")
+        if url:
+            import time
+            time.sleep(2)
+            browser.show_url(url)
+            log.info(f"Browser launched with URL: {url}")
+    except Exception:
+        log.exception("Failed to launch browser URL")
+
+threading.Thread(target=_launch_browser_async, daemon=True).start()
 
 start_motion_thread()
 _stats_broadcast_thread = None
