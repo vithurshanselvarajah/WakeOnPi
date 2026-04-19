@@ -196,7 +196,7 @@ def _on_message(client, userdata, msg):
 
 
 def _reconnect_loop():
-    global _reconnect_delay
+    global _reconnect_delay, _client, _connected
     while not _stop_reconnect.is_set():
         if _connected:
             break
@@ -205,16 +205,32 @@ def _reconnect_loop():
         if _stop_reconnect.is_set():
             break
         try:
-            if _client and not _connected:
-                cfg = config.current_settings()
-                host = cfg.get("MQTT_HOST") or "localhost"
-                port = int(cfg.get("MQTT_PORT") or 1883)
+            if _client:
                 try:
-                    _client.reconnect()
+                    _client.disconnect()
                 except Exception:
-                    _client.connect(host, port)
-                    threading.Thread(target=_client.loop_forever, daemon=True).start()
-                _reconnect_delay = 5
+                    pass
+                _client = None
+            
+            cfg = config.current_settings()
+            host = cfg.get("MQTT_HOST")
+            if not host:
+                log.info("MQTT host not configured")
+                break
+            
+            port = int(cfg.get("MQTT_PORT") or 1883)
+            _client = mqtt.Client()
+            if cfg.get("MQTT_USERNAME"):
+                _client.username_pw_set(cfg.get("MQTT_USERNAME"), cfg.get("MQTT_PASSWORD"))
+            _client.on_connect = _on_connect
+            _client.on_message = _on_message
+            _client.on_disconnect = _on_disconnect
+            
+            log.info(f"Reconnecting to MQTT {host}:{port}")
+            _client.connect(host, port)
+            threading.Thread(target=_client.loop_forever, daemon=True).start()
+            _reconnect_delay = 5
+            break
         except Exception:
             log.exception("MQTT reconnect failed")
             _reconnect_delay = min(_reconnect_delay * 2, _max_reconnect_delay)
