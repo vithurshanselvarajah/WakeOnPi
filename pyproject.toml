@@ -6,34 +6,35 @@ readme = "readme.md"
 requires-python = ">=3.14"
 license = {text = "GPL-3.0-or-later"}
 authors = [
-    {name = "WakeOnPi Contributors"}
+{name = "WakeOnPi Contributors"}
 ]
 keywords = ["raspberry-pi", "camera", "motion-detection", "mqtt", "streaming"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Environment :: Web Environment",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-    "Natural Language :: English",
-    "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Home Automation",
-    "Topic :: Multimedia :: Video :: Capture"
+"Development Status :: 5 - Production/Stable",
+"Environment :: Web Environment",
+"Intended Audience :: Developers",
+"License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+"Natural Language :: English",
+"Operating System :: POSIX :: Linux",
+"Programming Language :: Python :: 3",
+"Programming Language :: Python :: 3.14",
+"Topic :: Home Automation",
+"Topic :: Multimedia :: Video :: Capture"
 ]
+
 dependencies = [
-    "flask>=3.0",
-    "numpy>=1.20",
-    "opencv-python>=4.0",
-    "paho-mqtt>=2.0",
-    "picamera2>=0.3"
+"flask>=3.0",
+"numpy>=1.20",
+"opencv-python>=4.0",
+"paho-mqtt>=2.1.0",
+"picamera2>=0.3.36"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.1.0"
+"pytest>=9.0.3",
+"pytest-cov>=4.0",
+"ruff>=0.1.0",
 ]
 
 [project.urls]
@@ -55,24 +56,24 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=wakeonpi --cov-report=term-missing --cov-report=html --cov-report=xml"
 filterwarnings = [
-    "ignore::DeprecationWarning"
+"ignore::DeprecationWarning"
 ]
 
 [tool.coverage.run]
 source = ["wakeonpi"]
 omit = [
-    "*/tests/*",
-    "*/venv/*",
-    "*/__main__.py"
+"*/tests/*",
+"*/venv/*",
+"*/**main**.py"
 ]
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "if typing.TYPE_CHECKING:"
+"pragma: no cover",
+"def **repr**",
+"raise AssertionError",
+"raise NotImplementedError",
+"if **name** == .**main**.:",
+"if TYPE_CHECKING:",
+"if typing.TYPE_CHECKING:"
 ]
