@@ -3,7 +3,7 @@ name = "WakeOnPi"
 version = "0.0.13"
 description = "Raspberry Pi camera service with motion detection, streaming, and MQTT integration"
 readme = "readme.md"
-requires-python = ">=3.9"
+requires-python = ">=3.14"
 license = {text = "GPL-3.0-or-later"}
 authors = [
     {name = "WakeOnPi Contributors"}
@@ -17,9 +17,7 @@ classifiers = [
     "Natural Language :: English",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Home Automation",
     "Topic :: Multimedia :: Video :: Capture"
 ]
@@ -46,7 +44,7 @@ Issues = "https://github.com/vithurshanselvarajah/WakeOnPi/issues"
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

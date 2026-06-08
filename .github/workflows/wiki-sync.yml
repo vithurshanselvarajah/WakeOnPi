@@ -23,6 +23,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
       - name: Sync docs folder to wiki
         uses: newrelic/wiki-sync-action@v1.0.1
         with:
@@ -41,6 +47,11 @@ jobs:
         with:
           token: ${{ secrets.WIKI_SYNC_SECRET }}
           ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
 
       - name: Check Home.md exists before reverse sync
         id: safe

@@ -6,7 +6,7 @@ Thank you for your interest in contributing to WakeOnPi! This guide will help yo
 
 ## Prerequisites
 
-- Python 3.7+
+- Python 3.14
 - Git
 - Raspberry Pi 4/5 or Linux machine (for testing with camera)
 - Docker (optional, for isolated testing)

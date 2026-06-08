@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Raspberry Pi (3, 4, or 5 recommended) running Raspberry Pi OS or similar Linux distribution
-- Python 3.7 or higher
+- Python 3.14
 - Camera module connected and enabled
 - pip (Python package manager)
 
