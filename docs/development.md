@@ -82,7 +82,7 @@ WakeOnPi/
 ├── requirements.txt        # Production dependencies
 ├── requirements-dev.txt    # Development dependencies
 ├── pyproject.toml          # Project metadata
-└── README.md              # Main readme
+└── readme.md              # Main readme
 ```
 
 ## Code Style & Standards
@@ -93,19 +93,14 @@ WakeOnPi/
 - Maximum line length: 100 characters
 - Use type hints where practical
 
-### Linting & Formatting
+### Linting
 
 ```bash
-# Format code
-black wakeonpi/ tests/
-
 # Lint code
-pylint wakeonpi/
-
-# Type checking
-mypy wakeonpi/
+ruff check wakeonpi tests
 
 # All checks
+ruff check wakeonpi tests
 python -m pytest --cov=wakeonpi
 ```
 
@@ -302,9 +297,7 @@ GitHub Actions runs on every push:
 
 - ✅ Tests pass
 - ✅ Code coverage maintained
-- ✅ Linting passes
-- ✅ Security scanning (Bandit)
-- ✅ Dependency scanning (Dependabot)
+- ✅ Ruff linting passes
 
 ## Common Issues
 

@@ -1,258 +1,84 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Tests and Code Quality
+    types:
+      - completed
     branches:
       - main
 
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
 jobs:
-  check-release-commit:
-    name: Check for Release Commit
-    runs-on: ubuntu-latest
-    outputs:
-      is_release: ${{ steps.check.outputs.is_release }}
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Check commit message for release prefix
-        id: check
-        run: |
-          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          if [[ $COMMIT_MESSAGE =~ ^release: ]]; then
-            echo "is_release=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_release=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Extract version from commit message
-        id: version
-        if: steps.check.outputs.is_release == 'true'
-        run: |
-          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          VERSION=$(echo "$COMMIT_MESSAGE" | sed -n 's/^release: *v\?//p' | head -1)
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-  test:
-    name: Run Tests Before Release
-    runs-on: ubuntu-latest
-    if: needs.check-release-commit.outputs.is_release == 'true'
-    needs: check-release-commit
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Format check with black
-        run: black --check wakeonpi/ tests/
-
-      - name: Lint with flake8
-        run: |
-          flake8 wakeonpi/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 wakeonpi/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
-
-      - name: Type check with mypy
-        run: mypy wakeonpi/ --ignore-missing-imports --check-untyped-defs || true
-
-      - name: Run tests with pytest
-        run: |
-          pytest tests/ -v --cov=wakeonpi --cov-report=xml --cov-report=term-missing --tb=short
-
-      - name: Run security scan with bandit
-        run: |
-          pip install bandit[toml]
-          bandit -r wakeonpi/ -f json -o bandit-report.json || true
-          bandit -r wakeonpi/ -f txt
-
-      - name: Upload coverage
-        if: always()
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-
-  generate-release-notes:
-    name: Generate Release Notes
-    runs-on: ubuntu-latest
-    if: needs.check-release-commit.outputs.is_release == 'true' && needs.test.result == 'success'
-    needs: [check-release-commit, test]
-    outputs:
-      release_notes: ${{ steps.generate.outputs.notes }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate AI-based release notes
-        id: generate
-        run: |
-          python3 << 'EOF'
-          import subprocess
-          import json
-          import re
-          from datetime import datetime
-          
-          commit_msg = subprocess.check_output(['git', 'log', '-1', '--pretty=%B']).decode('utf-8')
-          commit_author = subprocess.check_output(['git', 'log', '-1', '--pretty=%an']).decode('utf-8').strip()
-          commit_hash = subprocess.check_output(['git', 'log', '-1', '--pretty=%h']).decode('utf-8').strip()
-          
-          try:
-              prev_tag = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0'], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-              changelog = subprocess.check_output(['git', 'log', f'{prev_tag}..HEAD', '--pretty=%s']).decode('utf-8')
-          except:
-              changelog = subprocess.check_output(['git', 'log', '--all', '--pretty=%s', '--max-count=20']).decode('utf-8')
-          
-          commit_lines = commit_msg.split('\n')
-          release_info = commit_lines[0].replace('release:', '').strip()
-          
-          notes = f"## Release: {release_info}\n\n"
-          notes += f"**Commit:** {commit_hash}\n"
-          notes += f"**Author:** {commit_author}\n"
-          notes += f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
-          
-          if len(commit_lines) > 1:
-              description = '\n'.join(commit_lines[1:]).strip()
-              if description:
-                  notes += f"### Release Notes\n{description}\n\n"
-          
-          feat_commits = [line for line in changelog.split('\n') if line.startswith('feat')]
-          fix_commits = [line for line in changelog.split('\n') if line.startswith('fix')]
-          
-          if feat_commits:
-              notes += "### Features\n"
-              for commit in feat_commits[:5]:
-                  notes += f"- {commit}\n"
-              if len(feat_commits) > 5:
-                  notes += f"- ... and {len(feat_commits) - 5} more features\n"
-              notes += "\n"
-          
-          if fix_commits:
-              notes += "### Bug Fixes\n"
-              for commit in fix_commits[:5]:
-                  notes += f"- {commit}\n"
-              if len(fix_commits) > 5:
-                  notes += f"- ... and {len(fix_commits) - 5} more fixes\n"
-              notes += "\n"
-          
-          try:
-              with open('requirements.txt', 'r') as f:
-                  deps = [line.strip() for line in f if '==' in line or '>=' in line]
-              if deps:
-                  notes += "### Dependencies Updated\n"
-                  for dep in deps[:5]:
-                      notes += f"- {dep}\n"
-                  if len(deps) > 5:
-                      notes += f"- ... and {len(deps) - 5} more dependencies\n"
-          except:
-              pass
-          
-          notes += "\n### Quality Assurance\n"
-          notes += "✅ All tests passed\n"
-          notes += "✅ Code formatting verified\n"
-          notes += "✅ Linting checks passed\n"
-          notes += "✅ Type checking completed\n"
-          notes += "✅ Security scanning completed\n"
-          
-          with open('/tmp/release_notes.md', 'w') as f:
-              f.write(notes)
-          
-          escaped_notes = notes.replace('\n', '\\n').replace('"', '\\"')
-          with open(f'/tmp/release_notes.txt', 'w') as f:
-              f.write(notes)
-          
-          EOF
-          cat /tmp/release_notes.txt >> $GITHUB_OUTPUT
-
-      - name: Upload release notes artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: release-notes
-          path: /tmp/release_notes.md
-
-  create-release:
+  release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    if: needs.check-release-commit.outputs.is_release == 'true' && needs.test.result == 'success'
-    needs: [check-release-commit, test, generate-release-notes]
-    permissions:
-      contents: write
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      startsWith(github.event.workflow_run.head_commit.message, 'release:')
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Download release notes
-        uses: actions/download-artifact@v3
-        with:
-          name: release-notes
-
-      - name: Get release notes content
-        id: notes
+      - name: Extract release version
+        id: version
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
         run: |
-          if [ -f release_notes.md ]; then
-            content=$(cat release_notes.md)
-            echo "content<<EOF" >> $GITHUB_OUTPUT
-            echo "$content" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "content=Release from commit ${{ github.sha }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Release Tag
-        run: |
-          VERSION="${{ needs.check-release-commit.outputs.version }}"
+          VERSION=$(printf '%s\n' "$COMMIT_MESSAGE" | sed -n 's/^release: *v\?//p' | head -1)
           if [ -z "$VERSION" ]; then
             VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
           fi
-          git tag "v${VERSION}" || git tag -d "v${VERSION}" && git tag "v${VERSION}"
-          git push origin "v${VERSION}" 2>/dev/null || true
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
+      - name: Create release notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+          {
+            echo "## Release: v${VERSION}"
+            echo
+            echo "**Commit:** ${COMMIT_HASH}"
+            echo "**Author:** ${COMMIT_AUTHOR}"
+            echo
+            echo "### Quality Assurance"
+            echo "- Tests passed"
+            echo "- Ruff linting passed"
+          } > release-notes.md
+
+      - name: Create release tag
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists locally."
+          else
+            git tag "v${VERSION}"
+          fi
+          git push origin "v${VERSION}"
+
+      - name: Create GitHub release
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ needs.check-release-commit.outputs.version }}
-          release_name: Release ${{ needs.check-release-commit.outputs.version }}
-          body: ${{ steps.notes.outputs.content }}
-          draft: false
-          prerelease: false
-
-  post-release:
-    name: Post-Release Notifications
-    runs-on: ubuntu-latest
-    if: needs.check-release-commit.outputs.is_release == 'true' && needs.test.result == 'success' && needs.create-release.result == 'success'
-    needs: [check-release-commit, test, create-release]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Comment on release commit
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ **Release Created Successfully**\n\nVersion: v${{ needs.check-release-commit.outputs.version }}\n\nAll tests passed. Release is now available on GitHub.'
-            })
-        continue-on-error: true
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "Release ${VERSION}" \
+            --notes-file release-notes.md

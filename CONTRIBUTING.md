@@ -34,8 +34,7 @@ See the [Development Guide](docs/development.md) for detailed setup instructions
 - Use 4 spaces for indentation
 - Maximum line length: 100 characters
 - Use type hints where practical
-- Run `black` for formatting: `black wakeonpi/`
-- Run `flake8` for linting: `flake8 wakeonpi/`
+- Run Ruff for linting: `ruff check wakeonpi tests`
 
 ## Testing
 
