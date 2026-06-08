@@ -3,6 +3,6 @@ pytest-cov==4.1.0
 pytest-xdist==3.5.0
 black==23.12.1
 ruff==0.1.11
-mypy==1.7.1
+mypy==1.19.1
 bandit[toml]==1.7.5
 types-requests==2.31.0.10
