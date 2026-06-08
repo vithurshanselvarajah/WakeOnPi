@@ -1,0 +1,179 @@
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: "0 2 * * *"
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  bandit:
+    name: Bandit Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml]
+
+      - name: Run Bandit scan
+        id: bandit
+        run: |
+          bandit -r wakeonpi/ -f json -o bandit-report.json || true
+          bandit -r wakeonpi/ -f txt
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+      - name: Comment PR with Bandit results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const report = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
+              if (report.metrics && Object.keys(report.metrics).length > 0) {
+                let comment = '## 🔒 Bandit Security Scan Results\n\n';
+                comment += `**Total Issues**: ${report.results.length}\n`;
+                
+                if (report.results.length > 0) {
+                  comment += '\n### Issues Found:\n';
+                  report.results.forEach((issue, index) => {
+                    comment += `\n${index + 1}. **${issue.test_id}** - ${issue.issue_text}\n`;
+                    comment += `   Location: \`${issue.filename}:${issue.line_number}\`\n`;
+                    comment += `   Severity: ${issue.severity}\n`;
+                  });
+                } else {
+                  comment += '\n✅ No security issues found!';
+                }
+                
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+            } catch (e) {
+              console.log('Could not parse Bandit report');
+            }
+
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Safety
+        run: pip install safety
+
+      - name: Check for vulnerable dependencies
+        run: |
+          safety check --json || true
+        continue-on-error: true
+
+  container-scan:
+    name: Container Security Scan (if Dockerfile exists)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check if Dockerfile exists
+        id: dockerfile
+        run: |
+          if [ -f "Dockerfile" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Trivy vulnerability scan (if Dockerfile exists)
+        if: steps.dockerfile.outputs.exists == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: steps.dockerfile.outputs.exists == 'true' && always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy"

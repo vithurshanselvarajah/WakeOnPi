@@ -48,5 +48,5 @@ def setup_logging(debug_mode=False):
     buffer_handler.setLevel(logging.DEBUG)
     buffer_handler.setFormatter(logging.Formatter("%(message)s"))
     root_logger.addHandler(buffer_handler)
-    
+
     return root_logger

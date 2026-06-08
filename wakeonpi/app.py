@@ -1,6 +1,6 @@
-import socket
 import json
 import time
+import logging
 import threading
 from pathlib import Path
 import cv2
@@ -9,16 +9,14 @@ from flask import Flask, Response, stream_with_context, request, redirect, url_f
 from . import config
 from .logging_config import setup_logging
 
-setup_logging(config.DEBUG_MODE)
-
-import logging
-log = logging.getLogger("App")
-
 from . import state, mqtt, browser, recorder, system, overlay
 from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed, get_stream_settings, reconfigure as reconfigure_camera
 from .auth import requires_auth
 from .motion import start_motion_thread
 from .display import set_display, set_brightness, get_brightness
+
+setup_logging(config.DEBUG_MODE)
+log = logging.getLogger("App")
 
 try:
     from flask_sock import Sock
@@ -83,7 +81,7 @@ def _parse_setting(key, val):
         return float(val)
     if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT", "RECORD_POST_MOTION_TIMEOUT", "STORAGE_MAX_PERCENT"):
         return int(val)
-    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE", 
+    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE",
                "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION"):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
     if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):

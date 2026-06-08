@@ -66,6 +66,7 @@ def switch_to_lores_mode_if_needed():
         if state.main_stream_active and state.clients_connected == 0:
             state.ignore_motion_until = time.time() + 2
             picam2.switch_mode(video_config_lores)
+
             state.main_stream_active = False
 
 

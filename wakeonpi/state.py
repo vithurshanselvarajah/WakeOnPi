@@ -73,5 +73,5 @@ def get_logs(level_filter=None, limit=100):
         logs = list(log_buffer)
     if level_filter:
         level_filter = level_filter.upper()
-        logs = [l for l in logs if l["level"] == level_filter]
+        logs = [log for log in logs if log["level"] == level_filter]
     return logs[-limit:]

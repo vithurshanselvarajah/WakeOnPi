@@ -1,9 +1,102 @@
 [project]
 name = "WakeOnPi"
 version = "0.0.13"
+description = "Raspberry Pi camera service with motion detection, streaming, and MQTT integration"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "WakeOnPi Contributors"}
+]
+keywords = ["raspberry-pi", "camera", "motion-detection", "mqtt", "streaming"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Home Automation",
+    "Topic :: Multimedia :: Video :: Capture"
+]
 dependencies = [
-    "flask",
-    "numpy",
-    "opencv-python",
-    "paho-mqtt"
+    "flask>=3.0",
+    "numpy>=1.20",
+    "opencv-python>=4.0",
+    "paho-mqtt>=2.0",
+    "picamera2>=0.3"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-xdist>=3.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "bandit[toml]>=1.7"
+]
+
+[project.urls]
+Homepage = "https://github.com/vithurshanselvarajah/WakeOnPi"
+Documentation = "https://github.com/vithurshanselvarajah/WakeOnPi/tree/main/docs"
+Repository = "https://github.com/vithurshanselvarajah/WakeOnPi.git"
+Issues = "https://github.com/vithurshanselvarajah/WakeOnPi/issues"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]  # Line length handled by black
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=wakeonpi --cov-report=term-missing --cov-report=html --cov-report=xml"
+filterwarnings = [
+    "ignore::DeprecationWarning"
+]
+
+[tool.coverage.run]
+source = ["wakeonpi"]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/__main__.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:"
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # Skip assert_used (used in tests)
+tests = [
+    "B201", "B301", "B302", "B303", "B304", "B305", "B306",
+    "B307", "B308", "B309", "B310", "B311", "B312", "B313",
+    "B314", "B315", "B316", "B317", "B318", "B319", "B320",
+    "B321", "B322", "B323", "B324", "B325"
 ]

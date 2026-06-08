@@ -1,7 +1,6 @@
 import json
 import threading
 import logging
-import time
 from pathlib import Path
 
 try:
@@ -10,7 +9,7 @@ except Exception:
     mqtt = None
 
 from . import config, state
-from .display import set_display, set_brightness, get_brightness
+from .display import set_display, set_brightness
 
 log = logging.getLogger("MQTT")
 
@@ -141,7 +140,7 @@ def _on_message(client, userdata, msg):
                 if not settings.get("RECORDING_ENABLED", True):
                     log.warning("Recording toggle ignored: recording is disabled")
                     return
-                    
+
                 from . import recorder
                 if recorder.is_recording():
                     recorder.stop_recording()
@@ -211,13 +210,13 @@ def _reconnect_loop():
                 except Exception:
                     pass
                 _client = None
-            
+
             cfg = config.current_settings()
             host = cfg.get("MQTT_HOST")
             if not host:
                 log.info("MQTT host not configured")
                 break
-            
+
             port = int(cfg.get("MQTT_PORT") or 1883)
             _client = mqtt.Client()
             if cfg.get("MQTT_USERNAME"):
@@ -225,7 +224,7 @@ def _reconnect_loop():
             _client.on_connect = _on_connect
             _client.on_message = _on_message
             _client.on_disconnect = _on_disconnect
-            
+
             log.info(f"Reconnecting to MQTT {host}:{port}")
             _client.connect(host, port)
             threading.Thread(target=_client.loop_forever, daemon=True).start()
@@ -380,7 +379,7 @@ def _publish_ha_discovery(prefix):
     port = settings.get("SERVICE_PORT", 5000)
     camera_enabled = settings.get("CAMERA_ENABLED", True)
     recording_enabled = settings.get("RECORDING_ENABLED", True)
-    
+
     device = {
         "identifiers": [prefix],
         "name": "WakeOnPi",

@@ -134,6 +134,7 @@ class _BrowserController:
         self._cmd_queue.put((fn, resp_q))
         if not wait:
             return None
+
         ok, val = resp_q.get()
         if not ok:
             raise val
