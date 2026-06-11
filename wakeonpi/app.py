@@ -4,6 +4,7 @@ import logging
 import sys
 import threading
 from pathlib import Path
+from urllib.parse import urlparse
 import cv2
 from flask import (
     Flask,
@@ -61,7 +62,13 @@ def login():
 
             session["logged_in"] = True
             session.permanent = True
-            next_url = request.args.get("next") or url_for("settings")
+            next_url = request.args.get("next", "")
+            normalized_next_url = next_url.replace("\\", "")
+            parsed_next_url = urlparse(normalized_next_url)
+            if parsed_next_url.scheme or parsed_next_url.netloc:
+                next_url = url_for("settings")
+            else:
+                next_url = normalized_next_url or url_for("settings")
             return redirect(next_url)
         return render_template("login.html", error="Invalid username or password")
     return render_template("login.html")
