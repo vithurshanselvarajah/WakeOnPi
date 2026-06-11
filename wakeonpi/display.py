@@ -5,15 +5,23 @@ log = logging.getLogger("Display")
 
 
 def _get_backlight_path():
-    return config.current_settings().get("BACKLIGHT_PATH") or "/sys/class/backlight/10-0045/bl_power"
+    return (
+        config.current_settings().get("BACKLIGHT_PATH") or "/sys/class/backlight/10-0045/bl_power"
+    )
 
 
 def _get_brightness_path():
-    return config.current_settings().get("BRIGHTNESS_PATH") or "/sys/class/backlight/10-0045/brightness"
+    return (
+        config.current_settings().get("BRIGHTNESS_PATH")
+        or "/sys/class/backlight/10-0045/brightness"
+    )
 
 
 def _get_brightness_max_path():
-    return config.current_settings().get("BRIGHTNESS_MAX_PATH") or "/sys/class/backlight/10-0045/max_brightness"
+    return (
+        config.current_settings().get("BRIGHTNESS_MAX_PATH")
+        or "/sys/class/backlight/10-0045/max_brightness"
+    )
 
 
 def set_display(on):

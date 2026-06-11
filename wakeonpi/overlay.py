@@ -58,6 +58,8 @@ def draw_overlay(frame):
     for i, line in enumerate(lines):
         y = y_start + padding + (i + 1) * line_height - 5
         color = (0, 255, 0) if "MOTION" in line else (255, 255, 255)
-        cv2.putText(frame, line, (x_start + padding, y), font, font_scale, color, thickness, cv2.LINE_AA)
+        cv2.putText(
+            frame, line, (x_start + padding, y), font, font_scale, color, thickness, cv2.LINE_AA
+        )
 
     return frame

@@ -8,6 +8,7 @@ log = logging.getLogger("Camera")
 
 picam2 = Picamera2()
 
+
 def _get_stream_resolution():
     try:
         res = config.current_settings().get("STREAM_RESOLUTION") or "854x480"
@@ -16,11 +17,13 @@ def _get_stream_resolution():
     except Exception:
         return (854, 480)
 
+
 def _get_stream_fps():
     try:
         return int(config.current_settings().get("STREAM_FPS") or 10)
     except Exception:
         return 10
+
 
 def _get_stream_quality():
     try:
@@ -28,12 +31,14 @@ def _get_stream_quality():
     except Exception:
         return 75
 
+
 def create_lores_config():
     return picam2.create_video_configuration(
         lores={"size": (320, 180), "format": "YUV420"},
         transform=Transform(vflip=True),
-        controls={"FrameRate": 2, "AwbMode": 0}
+        controls={"FrameRate": 2, "AwbMode": 0},
     )
+
 
 def create_full_config():
     fps = _get_stream_fps()
@@ -41,8 +46,9 @@ def create_full_config():
         main={"size": (1920, 1080), "format": "RGB888"},
         lores={"size": (320, 180), "format": "YUV420"},
         transform=Transform(vflip=True),
-        controls={"FrameRate": fps, "AwbMode": 0}
+        controls={"FrameRate": fps, "AwbMode": 0},
     )
+
 
 video_config_lores = create_lores_config()
 video_config_full = create_full_config()
@@ -74,7 +80,7 @@ def get_stream_settings():
     return {
         "resolution": _get_stream_resolution(),
         "fps": _get_stream_fps(),
-        "quality": _get_stream_quality()
+        "quality": _get_stream_quality(),
     }
 
 

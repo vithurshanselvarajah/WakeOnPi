@@ -1,5 +1,4 @@
 name: Release
-
 on:
   workflow_run:
     workflows:
@@ -8,14 +7,11 @@ on:
       - completed
     branches:
       - main
-
 permissions:
   contents: write
-
 concurrency:
   group: release-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
-
 jobs:
   release:
     name: Create GitHub Release
@@ -24,13 +20,11 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
       startsWith(github.event.workflow_run.head_commit.message, 'release:')
-
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
-
       - name: Extract release version
         id: version
         shell: bash
@@ -42,37 +36,33 @@ jobs:
             VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Create release notes
+      - name: Generate release notes from commits
+        id: notes
+        shell: bash
+        run: |
+          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^v' | head -2 | tail -1 | sed 's/^v//')
+          if [ -z "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s" > release-notes.md
+          else
+            git log v$PREV_TAG..HEAD --pretty=format:"- %s" > release-notes.md
+          fi
+      - name: Create source zip and checksum
+        id: assets
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          COMMIT_AUTHOR=$(git log -1 --pretty=%an)
-          {
-            echo "## Release: v${VERSION}"
-            echo
-            echo "**Commit:** ${COMMIT_HASH}"
-            echo "**Author:** ${COMMIT_AUTHOR}"
-            echo
-            echo "### Quality Assurance"
-            echo "- Tests passed"
-            echo "- Ruff linting passed"
-          } > release-notes.md
-
+          git archive --format=zip -o wakeonpi-${VERSION}.zip HEAD
+          sha256sum wakeonpi-${VERSION}.zip > wakeonpi-${VERSION}.zip.sha256
       - name: Create release tag
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${VERSION} already exists locally."
-          else
+          if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
             git tag "v${VERSION}"
           fi
           git push origin "v${VERSION}"
-
       - name: Create GitHub release
         shell: bash
         env:
@@ -82,3 +72,4 @@ jobs:
           gh release create "v${VERSION}" \
             --title "Release ${VERSION}" \
             --notes-file release-notes.md
+          gh release upload "v${VERSION}" "wakeonpi-${VERSION}.zip" "wakeonpi-${VERSION}.zip.sha256"

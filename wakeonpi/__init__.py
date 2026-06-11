@@ -1,3 +1,5 @@
+'''WakeOnPi package'''
+
 __all__ = [
     "app",
     "auth",
@@ -12,4 +14,6 @@ __all__ = [
     "recorder",
     "state",
     "system",
+    "updater",
 ]
+

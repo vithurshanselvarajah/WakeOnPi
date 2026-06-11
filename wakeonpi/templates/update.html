@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>WakeOnPi Updates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: rgba(30, 41, 59, 0.4);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0b0f19 0%, #111827 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+    }
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 8px;
+      background: linear-gradient(to right, #3b82f6, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+    .versions {
+      display: flex;
+      justify-content: space-around;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .version-item {
+      text-align: center;
+    }
+    .version-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .version-value {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .version-value.latest {
+      color: var(--primary);
+    }
+    .release-notes-box {
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      max-height: 250px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .release-notes-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .notes-content {
+      color: #cbd5e1;
+      white-space: pre-wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.4);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 12px;
+    }
+    .btn-secondary:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status-alert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+      border: 1px solid transparent;
+    }
+    .status-alert.info {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+    }
+    .status-alert.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+    }
+    .status-alert.error {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      font-size: 0.9rem;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <header>
+        <h1>System Update</h1>
+        <p class="subtitle">Keep your WakeOnPi screen controller up to date</p>
+      </header>
+
+      <div class="versions">
+        <div class="version-item">
+          <div class="version-label">Current Version</div>
+          <div class="version-value">v{{ current_version }}</div>
+        </div>
+        <div class="version-item">
+          <div class="version-label">Latest Release</div>
+          <div class="version-value latest">{% if latest_version %}v{{ latest_version }}{% else %}Unknown{% endif %}</div>
+        </div>
+      </div>
+
+      {% if update_status == 'installing' %}
+      <div class="status-alert info" id="status-alert">
+        <div class="spinner"></div>
+        <span id="status-text">Installing update. WakeOnPi will restart automatically...</span>
+      </div>
+      {% elif latest_version and latest_version != current_version %}
+      <div class="status-alert info" id="status-alert">
+        <span>An update is available. Click install below to start.</span>
+      </div>
+      {% elif latest_version == current_version %}
+      <div class="status-alert success" id="status-alert">
+        <span>✓ Your system is up to date.</span>
+      </div>
+      {% endif %}
+
+      {% if release_notes %}
+      <div class="release-notes-box">
+        <div class="release-notes-title">Release Notes</div>
+        <div class="notes-content">{{ release_notes }}</div>
+      </div>
+      {% endif %}
+
+      <div id="action-container">
+        {% if latest_version and latest_version != current_version and update_status != 'installing' %}
+        <button class="btn btn-primary" onclick="startUpdate()" id="btn-update">Install Update v{{ latest_version }}</button>
+        {% else %}
+        <button class="btn btn-primary" onclick="checkUpdates()" id="btn-check" {% if update_status == 'installing' %}disabled{% endif %}>Check for Updates</button>
+        {% endif %}
+      </div>
+
+      <button class="btn btn-secondary" onclick="location.href='/settings'" {% if update_status == 'installing' %}disabled{% endif %} id="btn-back">Back to Settings</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let pollInterval = null;
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    async function checkUpdates() {
+      const btn = document.getElementById('btn-check');
+      if (btn) btn.disabled = true;
+      showToast('Checking for updates...');
+      try {
+        const resp = await fetch('/api/update/check', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+          location.reload();
+        } else {
+          showToast('Failed to retrieve updates.');
+        }
+      } catch (e) {
+        showToast('Error during update check.');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function startUpdate() {
+      if (!confirm('Are you sure you want to install this update? WakeOnPi will restart.')) return;
+      
+      const btnUpdate = document.getElementById('btn-update');
+      const btnBack = document.getElementById('btn-back');
+      if (btnUpdate) btnUpdate.disabled = true;
+      if (btnBack) btnBack.disabled = true;
+
+      try {
+        const resp = await fetch('/settings/update', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+          // Display progress
+          const alert = document.getElementById('status-alert');
+          alert.className = 'status-alert info';
+          alert.innerHTML = '<div class="spinner"></div><span>Installing update. System will restart in a moment...</span>';
+          
+          startPollingStatus();
+        } else {
+          showToast(data.error || 'Failed to trigger update.');
+          if (btnUpdate) btnUpdate.disabled = false;
+          if (btnBack) btnBack.disabled = false;
+        }
+      } catch (e) {
+        showToast('Error triggering update.');
+        if (btnUpdate) btnUpdate.disabled = false;
+        if (btnBack) btnBack.disabled = false;
+      }
+    }
+
+    function startPollingStatus() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        try {
+          const resp = await fetch('/api/update/status');
+          const data = await resp.json();
+          if (data.update_status === 'failed') {
+            clearInterval(pollInterval);
+            const alert = document.getElementById('status-alert');
+            alert.className = 'status-alert error';
+            alert.innerHTML = `<span>Failed: ${data.update_error || 'Unknown error'}</span>`;
+            
+            const btnUpdate = document.getElementById('btn-update');
+            const btnBack = document.getElementById('btn-back');
+            if (btnUpdate) btnUpdate.disabled = false;
+            if (btnBack) btnBack.disabled = false;
+          } else if (data.update_status === 'idle') {
+            // Check if version changed
+            if (data.installed_version !== '{{ current_version }}') {
+              clearInterval(pollInterval);
+              const alert = document.getElementById('status-alert');
+              alert.className = 'status-alert success';
+              alert.innerHTML = '<span>✓ Update installed successfully! Reloading...</span>';
+              setTimeout(() => { location.href = '/settings'; }, 2000);
+            }
+          }
+        } catch (e) {
+          // Service is likely restarting; check again or reload settings page shortly
+          console.log('Error polling status, probably restarting...', e);
+        }
+      }, 2000);
+    }
+
+    // If page loaded while installing, start polling
+    if ('{{ update_status }}' === 'installing') {
+      const btnBack = document.getElementById('btn-back');
+      if (btnBack) btnBack.disabled = true;
+      startPollingStatus();
+    }
+  </script>
+</body>
+</html>

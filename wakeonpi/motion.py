@@ -41,6 +41,7 @@ def _handle_motion_recording(is_motion):
         return
     try:
         from . import recorder
+
         post_timeout = settings.get("RECORD_POST_MOTION_TIMEOUT", 10)
         if is_motion:
             _motion_recording_stop_time = time.time() + post_timeout
@@ -65,6 +66,7 @@ def _check_storage_for_recording():
     action = settings.get("STORAGE_FULL_ACTION", "pause")
     try:
         from . import system
+
         storage = system.get_storage_info()
         used_percent = storage.get("used_percent", 0)
         if used_percent >= max_percent:
@@ -83,6 +85,7 @@ def _check_storage_for_recording():
 def _delete_oldest_recording():
     try:
         from pathlib import Path
+
         recordings_root = Path(config.RECORDINGS_ROOT)
         if not recordings_root.exists():
             return
@@ -111,7 +114,7 @@ def motion_detection_loop():
             continue
 
         try:
-            gray = lores_frame[:lores_frame.shape[0] // 3, :].copy()
+            gray = lores_frame[: lores_frame.shape[0] // 3, :].copy()
             gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
             if prev_frame is not None and time.time() > state.ignore_motion_until:

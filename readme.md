@@ -10,9 +10,10 @@ It is built for always-on Pi setups where you want the display and stream to rea
 - Streams live MJPEG at `/stream`.
 - Captures snapshots at `/snapshot`.
 - Controls display power and brightness through sysfs backlight paths.
-- Offers a real-time settings UI at `/settings` (WebSocket-based).
-- Publishes state and accepts commands over MQTT (with Home Assistant discovery).
+- Offers a real-time settings UI at `/settings` (authenticated with cookie sessions and a custom login page).
+- Publishes state and accepts commands over MQTT (including Home Assistant auto-discovery for binary sensors, switches, numbers, and native update platform).
 - Supports manual and motion-triggered recording.
+- Self-update mechanism triggered via WebUI or Home Assistant.
 
 ## Quick start
 
@@ -37,33 +38,46 @@ http://<pi-ip>:5000/stream
 
 ## Main endpoints
 
-- `GET /settings` - settings dashboard (auth)
-- `GET /stream` - MJPEG stream (auth)
-- `GET /snapshot` - single JPEG frame (auth)
+- `GET /login` / `/logout` - WebUI session management
+- `GET /settings` - settings dashboard (session auth)
+- `GET /stream` - MJPEG stream (stream basic auth or session auth)
+- `GET /snapshot` - single JPEG frame (stream basic auth or session auth)
 - `GET /health` - health and system stats
 - `GET /motion_alerts` - `motion` or `nomotion`
-- `GET /api/status` - full runtime status (auth)
-- `GET/POST /api/settings` - read/update settings (auth)
-- `POST /api/display` - display on/off and brightness (auth)
-- `GET /api/logs` - recent in-memory logs (auth)
+- `GET /api/status` - full runtime status (session auth)
+- `GET/POST /api/settings` - read/update settings (session auth)
+- `POST /api/display` - display on/off and brightness (session auth)
+- `GET /api/logs` - recent in-memory logs (session auth)
+- `POST /api/update/check` / `POST /api/update/install` - version checking and updates (session auth)
 - `WS /ws` - live status updates and control events
 
 ## Configuration
 
-Runtime settings are stored in `wakeonpi/settings.json` (defaults in `wakeonpi/config.py`).
+The application now stores all configuration in an internal SQLite database (`wakeonpi.db`). The previous `settings.json` file is migrated on first start. Users configure the system through the web UI; on first launch the app redirects to a **Setup Wizard** where a username and password are created. These credentials are stored hashed in the database.
 
-Most configuration is expected to be done from `/settings`, including:
+Key configuration points:
 
-- Motion thresholds and inactivity timeout
-- Stream resolution, FPS, and JPEG quality
-- Display paths and brightness control
-- MQTT broker and topic prefix
-- Recording and storage behavior
-- Screen mode: `auto`, `always_on`, `always_off`
+- **Database**: `wakeonpi/db.py` manages the SQLite file located at `wakeonpi/wakeonpi.db`. It contains tables for settings and user credentials.
+- **Setup Flow**: On first run, if no admin user exists, visiting any page redirects to `/setup`. The wizard asks for an admin username and password, which are saved securely (PBKDF2 hash). After setup, normal operation resumes.
+- **Stream Authentication**: Stream endpoints (`/stream`, `/snapshot`) continue to support Basic Auth with a generated random password, visible and resettable via the Settings UI.
+- **Home Assistant Integration**: The update mechanism is exposed via Home Assistant using the native update platform. Updates can be triggered from Home Assistant or the Web UI.
+- **Other Settings**: Remaining runtime options (motion thresholds, display control, MQTT broker, etc.) are still accessible via the Settings page and are persisted in the SQLite database.
+
+The migration from `settings.json` to SQLite is automatic: if `settings.json` is present, its contents are imported into the database on first launch, after which the JSON file is ignored.
 
 ## Notes
 
 - This project is designed for Linux on Raspberry Pi (uses `picamera2`, `/proc`, and `/sys/class/backlight/...`).
 - Camera and backlight access may require elevated permissions depending on your setup.
-- HTTP endpoints use Basic Auth configured in settings (`HTTP_USERNAME` / `HTTP_PASSWORD`).
+- WebUI endpoints use session-based cookie authentication using a session secret key.
+- Stream endpoints (`/stream` and `/snapshot`) support Basic Auth using the username `stream` and a randomly generated password, visible and resettable via the WebUI.
+- Updates pull the latest code from GitHub (`git pull`), install new dependencies (`pip install`), and trigger an in-place Python process reload without requiring root/sudo privileges.
 - MQTT is optional; if unavailable, the app still runs without it.
+
+## Development
+
+To reset the application state during development, you can delete the SQLite database file:
+```powershell
+Remove-Item -Force "wakeonpi/wakeonpi.db"
+```
+The file is ignored by Git via `.gitignore`.

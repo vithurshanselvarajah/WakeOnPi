@@ -1,13 +1,13 @@
 import logging
 from . import state
 
-FILTERED_PATHS = ['/api/logs', '/snapshot']
+FILTERED_PATHS = ["/api/logs", "/snapshot"]
 
 
 class FilteredLogHandler(logging.Handler):
     def emit(self, record):
         try:
-            if record.name == 'werkzeug':
+            if record.name == "werkzeug":
                 msg = record.getMessage()
                 for path in FILTERED_PATHS:
                     if path in msg:
@@ -23,7 +23,7 @@ class FilteredLogHandler(logging.Handler):
 class FilteredConsoleHandler(logging.StreamHandler):
     def emit(self, record):
         try:
-            if record.name == 'werkzeug':
+            if record.name == "werkzeug":
                 msg = record.getMessage()
                 for path in FILTERED_PATHS:
                     if path in msg:
