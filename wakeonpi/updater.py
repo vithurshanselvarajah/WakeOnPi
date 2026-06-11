@@ -6,11 +6,17 @@ import urllib.request
 import urllib.error
 import json
 from . import state
-from .github_updater import GitHubReleaseUpdater
 
-updater_instance = GitHubReleaseUpdater()
+updater_instance = None
 
 log = logging.getLogger("Updater")
+
+def _get_updater_instance():
+    global updater_instance
+    if updater_instance is None:
+        from .github_updater import GitHubReleaseUpdater
+        updater_instance = GitHubReleaseUpdater()
+    return updater_instance
 
 def fetch_latest_version():
     url = "https://raw.githubusercontent.com/vithurshanselvarajah/WakeOnPi/main/pyproject.toml"
@@ -82,9 +88,10 @@ def _update_worker(triggered_by: str = None):
         if triggered_by:
             state.update_initiated_by = triggered_by
     try:
-        tag = updater_instance.fetch_latest_release(triggered_by=triggered_by)
+        updater = _get_updater_instance()
+        tag = updater.fetch_latest_release(triggered_by=triggered_by)
         log.info(f"Latest release tag resolved to {tag}")
-        updater_instance.install_release(tag)
+        updater.install_release(tag)
         log.info("Update installed successfully. Restarting service...")
         with state.update_lock:
             state.update_status = "idle"
