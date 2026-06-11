@@ -16,8 +16,8 @@ class TestDatabaseOperations(unittest.TestCase):
         if cls.test_db_file.exists():
             try:
                 os.remove(cls.test_db_file)
-            except Exception:
-                pass
+            except Exception as e:
+                raise AssertionError(f"Failed to remove test database file {cls.test_db_file}: {e}") from e
 
     def setUp(self):
         db.DB_FILE = self.test_db_file
@@ -26,8 +26,8 @@ class TestDatabaseOperations(unittest.TestCase):
             with db.get_db_connection() as conn:
                 conn.execute("DELETE FROM settings")
                 conn.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            self.fail(f"Failed to reset settings table during test setup: {e}")
 
     def tearDown(self):
         pass
