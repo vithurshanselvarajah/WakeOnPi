@@ -340,6 +340,18 @@
       </div>
     </header>
 
+    {% if db_error %}
+    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; backdrop-filter: blur(10px);">
+      <div>
+        <h3 style="color: var(--danger); font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">⚠️ Database Error</h3>
+        <p style="font-size: 0.85rem; color: var(--text);">The SQLite database appears to be corrupted or incompatible: <code>{{ db_error }}</code></p>
+      </div>
+      <form action="/settings/db/reset" method="post" onsubmit="return confirm('Are you sure you want to reset the database? All settings will be restored to their defaults.');" style="margin: 0; display: inline;">
+        <button type="submit" class="btn btn-danger btn-sm" style="white-space: nowrap; width: auto; font-weight: 600;">Reset Database</button>
+      </form>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="card-header" onclick="toggleCard(this)">
         <h2><span class="icon">📊</span> System Status</h2>
@@ -646,6 +658,51 @@
           </div>
         </div>
         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">⚠️ Changing credentials requires re-login</p>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <h3 style="font-size:0.95rem;margin-bottom:12px;font-weight:600">📺 Stream Authentication</h3>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Use these credentials to view the stream/snapshots in external apps (e.g. Home Assistant):</p>
+          <div class="row">
+            <div class="form-group">
+              <label>Stream Username</label>
+              <input type="text" id="stream-username" readonly style="background:var(--card)">
+            </div>
+            <div class="form-group">
+              <label>Stream Password</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="stream-password" readonly style="background:var(--card)">
+                <button class="btn btn-secondary btn-sm" onclick="resetStreamPassword()" style="width:auto">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card collapsed" id="updater-card">
+      <div class="card-header" onclick="toggleCard(this)">
+        <h2><span class="icon">🔄</span> Updates</h2>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:1.1rem;font-weight:600" id="update-title">WakeOnPi Up to Date</div>
+              <div style="font-size:0.85rem;color:var(--text-muted)" id="update-details">Installed: v<span id="installed-ver">--</span> | Latest: v<span id="latest-ver">--</span></div>
+            </div>
+            <div id="update-action-container">
+              <button class="btn btn-primary btn-sm" onclick="checkUpdates()" id="btn-check-updates">Check for Updates</button>
+            </div>
+          </div>
+          <div id="update-progress-container" style="display:none">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px">
+              <span id="update-progress-text">Installing update...</span>
+              <span id="update-spinner" style="animation:spin 1s linear infinite;display:inline-block">🔄</span>
+            </div>
+          </div>
+          <div id="update-error-message" style="display:none;color:var(--danger);font-size:0.85rem;background:rgba(239,68,68,0.1);padding:10px;border-radius:6px">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -791,6 +848,43 @@
       document.getElementById('browser-status').textContent = data.browser_running ? '🟢 Running' : '🔴 Stopped';
       document.getElementById('browser-url').value = data.browser_url || '';
 
+      if (data.update) {
+        const up = data.update;
+        document.getElementById('installed-ver').textContent = data.version || '--';
+        document.getElementById('latest-ver').textContent = up.latest_version || '--';
+        
+        const title = document.getElementById('update-title');
+        const actionContainer = document.getElementById('update-action-container');
+        const progressContainer = document.getElementById('update-progress-container');
+        const errDiv = document.getElementById('update-error-message');
+        
+        if (up.status === 'installing') {
+          title.textContent = 'Installing Update...';
+          progressContainer.style.display = 'block';
+          actionContainer.innerHTML = '';
+          errDiv.style.display = 'none';
+        } else {
+          progressContainer.style.display = 'none';
+          
+          if (up.error) {
+            errDiv.textContent = 'Error: ' + up.error;
+            errDiv.style.display = 'block';
+          } else {
+            errDiv.style.display = 'none';
+          }
+          
+          if (up.latest_version && data.version && up.latest_version !== data.version) {
+            title.textContent = 'Update Available!';
+            title.style.color = 'var(--warning)';
+            actionContainer.innerHTML = '<button class="btn btn-success btn-sm" onclick="installUpdate()">Install Update</button>';
+          } else {
+            title.textContent = 'WakeOnPi Up to Date';
+            title.style.color = '';
+            actionContainer.innerHTML = '<button class="btn btn-primary btn-sm" onclick="checkUpdates()" id="btn-check-updates">Check for Updates</button>';
+          }
+        }
+      }
+
       if (data.settings) {
         settings = data.settings;
         document.getElementById('motion-threshold').value = settings.MOTION_THRESHOLD || 1500;
@@ -816,6 +910,8 @@
         document.getElementById('overlay-position').value = settings.OVERLAY_POSITION || 'top-right';
         document.getElementById('service-port').value = settings.SERVICE_PORT || 5000;
         document.getElementById('debug-toggle').classList.toggle('active', settings.DEBUG_MODE);
+        document.getElementById('stream-username').value = settings.STREAM_USERNAME || 'stream';
+        document.getElementById('stream-password').value = settings.STREAM_PASSWORD || '';
 
         document.getElementById('camera-toggle').classList.toggle('active', settings.CAMERA_ENABLED !== false);
         document.getElementById('recording-toggle').classList.toggle('active', settings.RECORDING_ENABLED !== false);
@@ -987,6 +1083,55 @@
       toast.textContent = message;
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    async function resetStreamPassword() {
+      if (!confirm('Are you sure you want to reset the stream password? This will disconnect external feeds until updated.')) return;
+      try {
+        const resp = await fetch('/settings/stream_password/reset', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+          document.getElementById('stream-password').value = data.password;
+          showToast('Stream password reset successfully');
+        }
+      } catch (e) {
+        showToast('Failed to reset stream password');
+      }
+    }
+
+    async function checkUpdates() {
+      showToast('Checking for updates...');
+      try {
+        const btn = document.getElementById('btn-check-updates');
+        if (btn) btn.disabled = true;
+        const resp = await fetch('/api/update/check', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+          showToast(data.latest_version ? 'Latest version: v' + data.latest_version : 'Check completed');
+        } else {
+          showToast('Update check failed');
+        }
+      } catch (e) {
+        showToast('Error checking for updates');
+      } finally {
+        const btn = document.getElementById('btn-check-updates');
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function installUpdate() {
+      if (!confirm('Are you sure you want to install the update? The service will restart automatically.')) return;
+      try {
+        const resp = await fetch('/api/update/install', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+          showToast('Installing update, please wait...');
+        } else {
+          showToast('Failed to start update');
+        }
+      } catch (e) {
+        showToast('Error starting update');
+      }
     }
 
     let logFilters = { DEBUG: true, INFO: true, WARNING: true, ERROR: true, CRITICAL: true };

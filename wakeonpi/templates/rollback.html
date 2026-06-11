@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>WakeOnPi Rollback</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: rgba(30, 41, 59, 0.4);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0b0f19 0%, #111827 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+    }
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 8px;
+      background: linear-gradient(to right, #ef4444, #f87171);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+    .form-group {
+      margin-bottom: 24px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    select {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    select:focus {
+      outline: none;
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+      box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.4);
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: #dc2626;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 12px;
+    }
+    .btn-secondary:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status-alert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+      border: 1px solid transparent;
+    }
+    .status-alert.info {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+    }
+    .status-alert.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.15);
+      color: #fde047;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      font-size: 0.9rem;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <header>
+        <h1>System Rollback</h1>
+        <p class="subtitle">Revert WakeOnPi to a previously installed version</p>
+      </header>
+
+      <div class="status-alert warning">
+        <span>⚠️ Warning: Rolling back to an older version may result in database schema incompatibility. Proceed with caution.</span>
+      </div>
+
+      <div class="status-alert info" style="display:none" id="progress-alert">
+        <div class="spinner"></div>
+        <span>Reverting version and restarting system...</span>
+      </div>
+
+      <form id="rollback-form" onsubmit="triggerRollback(event)">
+        <div class="form-group">
+          <label for="version-select">Select Target Version</label>
+          <select id="version-select" name="version">
+            {% for version in installed_versions %}
+            <option value="{{ version }}" {% if version == current_version %}selected{% endif %}>
+              v{{ version }} {% if version == current_version %}(Active){% endif %}
+            </option>
+            {% else %}
+            <option value="" disabled>No older versions available</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-danger" id="btn-submit" {% if not installed_versions %}disabled{% endif %}>
+          Perform Rollback
+        </button>
+      </form>
+
+      <button class="btn btn-secondary" onclick="location.href='/settings'" id="btn-back">
+        Cancel & Back
+      </button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    async function triggerRollback(event) {
+      event.preventDefault();
+      const select = document.getElementById('version-select');
+      const targetVersion = select.value;
+      
+      if (!targetVersion) {
+        showToast('Please select a version.');
+        return;
+      }
+      
+      if (targetVersion === '{{ current_version }}') {
+        showToast('Selected version is already the active version.');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to rollback to v${targetVersion}? The system will restart immediately.`)) {
+        return;
+      }
+
+      const btnSubmit = document.getElementById('btn-submit');
+      const btnBack = document.getElementById('btn-back');
+      btnSubmit.disabled = true;
+      btnBack.disabled = true;
+
+      const progressAlert = document.getElementById('progress-alert');
+      progressAlert.style.display = 'flex';
+
+      try {
+        const formData = new FormData();
+        formData.append('version', targetVersion);
+
+        const resp = await fetch('/settings/rollback', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+          showToast('Rollback successful. Reconnecting...');
+          setTimeout(() => {
+            location.href = '/settings';
+          }, 3000);
+        } else {
+          showToast(data.error || 'Rollback failed.');
+          btnSubmit.disabled = false;
+          btnBack.disabled = false;
+          progressAlert.style.display = 'none';
+        }
+      } catch (e) {
+        showToast('Rollback request sent. Page will redirect.');
+        setTimeout(() => {
+          location.href = '/settings';
+        }, 4000);
+      }
+    }
+  </script>
+</body>
+</html>

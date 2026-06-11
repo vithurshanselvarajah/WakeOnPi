@@ -8,3 +8,5 @@ htmlcov/
 *.egg-info/
 venv/
 .venv/
+# Runtime SQLite database - ignored by Git
+wakeonpi/wakeonpi.db

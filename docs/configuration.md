@@ -1,223 +1,88 @@
 # Configuration Guide
 
-## Environment Variables
+WakeOnPi stores all system configuration and administrative credentials in an internal SQLite database (`wakeonpi.db`) located in the package directory. Setting values are persisted automatically across reboots and process restarts.
 
-WakeOnPi is configured via environment variables. Create a `.env` file in the project root or set them in your environment.
+---
 
-### Authentication
+## Initial Setup Flow
 
-```env
-# Basic authentication credentials
-AUTH_USERNAME=admin
-AUTH_PASSWORD=your_secure_password_here
+On first launch, WakeOnPi detects if the database is unconfigured. Visiting any endpoint will redirect you to the **Setup Wizard** at `/setup`.
 
-# Session timeout (seconds)
-SESSION_TIMEOUT=3600
-```
+1. **Create Administrator Account**: Enter your desired admin username and a secure password.
+2. **Persistence**: These credentials are saved as salted PBKDF2 hashes in the database.
+3. **Session Authentication**: Logging in at `/login` provides a browser cookie session to access the dashboard.
 
-### MQTT Configuration
-
-```env
-# MQTT Broker settings
-MQTT_ENABLED=true
-MQTT_BROKER=192.168.1.100
-MQTT_PORT=1883
-MQTT_USERNAME=mqtt_user
-MQTT_PASSWORD=mqtt_password
-
-# Topic prefix for all published topics
-MQTT_TOPIC_PREFIX=wakeonpi
-
-# Home Assistant Discovery (optional)
-MQTT_HA_DISCOVERY=true
-MQTT_HA_PREFIX=homeassistant
-```
-
-### Display Configuration
-
-```env
-# Path to brightness control (sysfs)
-DISPLAY_BRIGHTNESS_PATH=/sys/class/backlight/rpi_backlight/brightness
-
-# Path to max brightness file
-DISPLAY_MAX_BRIGHTNESS_PATH=/sys/class/backlight/rpi_backlight/max_brightness
-
-# Default brightness level (0-100)
-DISPLAY_DEFAULT_BRIGHTNESS=100
-
-# Auto-off timeout in seconds (0 = disabled)
-DISPLAY_AUTO_OFF_TIMEOUT=600
-```
-
-### Camera Configuration
-
-```env
-# Camera rotation in degrees (0, 90, 180, 270)
-CAMERA_ROTATION=0
-
-# Camera resolution (width x height)
-CAMERA_RESOLUTION=1280x720
-
-# Frame rate (fps)
-CAMERA_FRAMERATE=30
-
-# Camera flip (horizontal/vertical)
-CAMERA_HFLIP=false
-CAMERA_VFLIP=false
-```
-
-### Motion Detection
-
-```env
-# Motion detection sensitivity (0.0-100.0, lower = more sensitive)
-MOTION_THRESHOLD=5.0
-
-# Minimum area for motion detection (pixels)
-MOTION_MIN_AREA=500
-
-# Debounce time (seconds) to avoid rapid toggles
-MOTION_DEBOUNCE_TIME=2
-
-# Enable motion detection
-MOTION_ENABLED=true
-```
-
-### Recording Configuration
-
-```env
-# Recording directory
-RECORDING_DIR=./recordings
-
-# Maximum recording file size (MB)
-RECORDING_MAX_SIZE=500
-
-# Recording quality (1-51, lower = better)
-RECORDING_QUALITY=23
-
-# Enable auto-recording on motion
-RECORDING_AUTO_ON_MOTION=true
-```
-
-### Application Settings
-
-```env
-# Flask debug mode (disable in production)
-FLASK_DEBUG=false
-
-# Flask host and port
-FLASK_HOST=0.0.0.0
-FLASK_PORT=5000
-
-# Logging level (DEBUG, INFO, WARNING, ERROR)
-LOG_LEVEL=INFO
-
-# Log file path (empty = stdout only)
-LOG_FILE=/var/log/wakeonpi/app.log
-```
+---
 
 ## Settings Dashboard
 
-The settings dashboard at `/settings` provides a web-based interface to modify configuration at runtime. Changes made through the dashboard are persisted to disk.
+The Settings Dashboard at `/settings` provides an interactive interface to configure the following areas at runtime:
 
-### Available Settings
+### 1. Display Control
+- **SCREEN_CONTROL_MODE**:
+  - `auto`: Power screen on/off based on motion detection.
+  - `always_on`: Keep screen powered on continuously.
+  - `always_off`: Keep screen powered off continuously.
+- **BACKLIGHT_PATH**: Sysfs path controlling display power (e.g., `/sys/class/backlight/rpi_backlight/bl_power`).
+- **BRIGHTNESS_PATH**: Sysfs path controlling display brightness (e.g., `/sys/class/backlight/rpi_backlight/brightness`).
+- **INACTIVITY_TIMEOUT**: Inactivity delay (seconds) before powering off the screen when mode is `auto`.
 
-- **Display**: Power state, brightness level, auto-off timeout
-- **Motion Detection**: Enable/disable, sensitivity, debounce settings
-- **Recording**: Enable/disable, quality, storage location
-- **Stream**: Resolution, frame rate
-- **MQTT**: Broker settings, topic prefix
-- **System**: Restart service, view logs
+### 2. Motion Detection
+- **MOTION_THRESHOLD**: Motion sensitivity threshold (lower values make the detection more sensitive).
+- **CHECK_INTERVAL**: Delay (seconds) between camera frames checked for motion.
 
-## MQTT Topics
+### 3. Camera & Streaming
+- **STREAM_RESOLUTION**: Streaming video feed size (e.g., `854x480`, `1280x720`).
+- **STREAM_FPS**: Target frames-per-second.
+- **STREAM_QUALITY**: JPEG compression quality (1-100).
+- **STREAM_PASSWORD**: Randomly generated basic authentication password for `/stream` and `/snapshot`.
 
-### Published Topics
+### 4. Recordings
+- **RECORD_ON_MOTION**: Enable automated video recording upon motion detection.
+- **RECORD_POST_MOTION_TIMEOUT**: Duration (seconds) to continue recording after motion has stopped.
+- **STORAGE_MAX_PERCENT**: Disk space threshold before executing storage actions.
+- **STORAGE_FULL_ACTION**: Action when disk is full (`pause` or `overwrite`).
 
+### 5. MQTT & Home Assistant
+- **MQTT_HOST**: Broker IP address or hostname.
+- **MQTT_PORT**: Port number (default: `1883`).
+- **MQTT_USERNAME** / **MQTT_PASSWORD**: Credentials for MQTT authentication.
+- **MQTT_TOPIC_PREFIX**: Base topic prefix for all state and command topics.
+- **UPDATE_CHANNEL**: Release channel (`release` or `beta`) for automatic updates.
+
+---
+
+## MQTT Topics & Integration
+
+### State Topics (Published by WakeOnPi)
 ```
-<prefix>/status        - Full JSON status (online/offline)
-<prefix>/motion        - Motion detection state (motion/nomotion)
-<prefix>/display/power - Display power state (on/off)
-<prefix>/display/brightness - Current brightness (0-100)
-<prefix>/recording     - Recording state (recording/stopped)
-<prefix>/stream        - Stream availability (active/inactive)
-```
-
-### Subscribed Topics
-
-```
-<prefix>/command/display/on     - Turn display on
-<prefix>/command/display/off    - Turn display off
-<prefix>/command/display/brightness - Set brightness (0-100)
-<prefix>/command/record/start   - Start recording
-<prefix>/command/record/stop    - Stop recording
-```
-
-## Home Assistant Integration
-
-WakeOnPi automatically publishes MQTT Discovery messages for Home Assistant integration when `MQTT_HA_DISCOVERY=true`.
-
-### Available Entities
-
-- **Binary Sensor**: Motion detection state
-- **Switch**: Display power control
-- **Light**: Display brightness control
-- **Camera**: MJPEG stream feed
-- **Sensor**: System stats (CPU, memory, temperature)
-
-## Advanced Configuration
-
-### Custom Backlight Path
-
-Find your backlight path:
-
-```bash
-ls /sys/class/backlight/
+<prefix>/state/availability         - Client availability ("online" / "offline")
+<prefix>/state/motion               - Motion sensor state ("ON" / "OFF")
+<prefix>/state/screen               - Display power state ("ON" / "OFF")
+<prefix>/state/screen/brightness    - Display brightness level (5-100)
+<prefix>/state/screen/mode          - Control mode ("auto" / "always_on" / "always_off")
+<prefix>/state/recording/active     - Recording state ("ON" / "OFF")
+<prefix>/state/system/ip            - Local IP address
+<prefix>/state/update               - Update availability status (JSON payload)
 ```
 
-Common paths:
-- Raspberry Pi 7" Touchscreen: `/sys/class/backlight/rpi_backlight/`
-- Generic display: `/sys/class/backlight/[your-display]/`
-
-### Performance Tuning
-
-For better performance on Pi Zero:
-
-```env
-CAMERA_RESOLUTION=640x480
-CAMERA_FRAMERATE=15
-MOTION_THRESHOLD=10.0
+### Command Topics (Subscribed by WakeOnPi)
+```
+<prefix>/command/screen/set         - Set screen power ("ON" / "OFF")
+<prefix>/command/screen/brightness  - Set screen brightness (5-100)
+<prefix>/command/screen/mode        - Change screen mode ("auto", "always_on", "always_off")
+<prefix>/command/browser/url_set    - Launch/redirect browser to URL
+<prefix>/command/browser/refresh    - Refresh current browser page
+<prefix>/command/recording/toggle   - Start/stop recording
+<prefix>/command/update/install     - Install available firmware update ("install")
 ```
 
-For higher quality on Pi 4:
+---
 
-```env
-CAMERA_RESOLUTION=1920x1080
-CAMERA_FRAMERATE=60
-MOTION_THRESHOLD=3.0
-```
+## Home Assistant Native Update Platform
 
-### Security
+If MQTT is configured, WakeOnPi publishes Home Assistant Discovery metadata to integrate directly with the native Home Assistant Update entity.
 
-- Always use strong passwords
-- Change default credentials before deployment
-- Use HTTPS in production (via reverse proxy)
-- Restrict MQTT broker access
-- Enable authentication for all endpoints
-
-## Troubleshooting Configuration
-
-### Settings not persisting
-- Check file permissions in data directory
-- Verify disk space availability
-- Review application logs for errors
-
-### MQTT not connecting
-- Verify broker is accessible: `telnet <broker> 1883`
-- Check credentials in `.env` file
-- Review MQTT logs on broker
-
-### Display control not working
-- Verify backlight path exists
-- Check file permissions
-- Ensure user has access to `/sys/class/backlight/`
-
-For more help, see [Installation Guide](./installation.md) troubleshooting section.
+- **Check Updates**: Done automatically in the background.
+- **Trigger Installation**: Trigger update installation directly via the Home Assistant card or the `/settings/update` interface.
+- **Rollbacks**: If an update breaks compatibility, you can roll back to a previously installed version via the rollback page in the WebUI.

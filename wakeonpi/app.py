@@ -1,17 +1,36 @@
 import json
 import time
 import logging
+import sys
 import threading
 from pathlib import Path
+from urllib.parse import urlparse
 import cv2
-from flask import Flask, Response, stream_with_context, request, redirect, url_for, render_template, jsonify
+from flask import (
+    Flask,
+    Response,
+    stream_with_context,
+    request,
+    redirect,
+    url_for,
+    render_template,
+    jsonify,
+)
 
 from . import config
 from .logging_config import setup_logging
+from . import db
+from .updater import trigger_update
 
 from . import state, mqtt, browser, recorder, system, overlay
-from .camera import picam2, switch_to_full_mode, switch_to_lores_mode_if_needed, get_stream_settings, reconfigure as reconfigure_camera
-from .auth import requires_auth
+from .camera import (
+    picam2,
+    switch_to_full_mode,
+    switch_to_lores_mode_if_needed,
+    get_stream_settings,
+    reconfigure as reconfigure_camera,
+)
+from .auth import requires_session_auth, requires_stream_auth, check_auth
 from .motion import start_motion_thread
 from .display import set_display, set_brightness, get_brightness
 
@@ -20,40 +39,231 @@ log = logging.getLogger("App")
 
 try:
     from flask_sock import Sock
+
     WEBSOCKET_ENABLED = True
 except ImportError:
     WEBSOCKET_ENABLED = False
     log.warning("flask-sock not installed, WebSocket support disabled")
 
 app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
 
 if WEBSOCKET_ENABLED:
     sock = Sock(app)
 
-log.info("Starting system stats service")
-system.start()
-log.info("Starting MQTT service")
-mqtt.start()
-log.info("Starting browser service")
-try:
-    browser.start()
-except Exception:
-    log.exception("Failed to start browser service")
 
-def _launch_browser_async():
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        if check_auth(username, password):
+            from flask import session
+
+            session["logged_in"] = True
+            session.permanent = True
+            next_url = request.args.get("next", "")
+            normalized_next_url = next_url.replace("\\", "")
+            parsed_next_url = urlparse(normalized_next_url)
+            if parsed_next_url.scheme or parsed_next_url.netloc:
+                next_url = url_for("settings")
+            else:
+                next_url = normalized_next_url or url_for("settings")
+            return redirect(next_url)
+        return render_template("login.html", error="Invalid username or password")
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    from flask import session
+
+    session.pop("logged_in", None)
+    return redirect(url_for("login"))
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    if config.SETUP_COMPLETE:
+        return redirect(url_for("settings"))
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        confirm = request.form.get("confirm_password")
+        if not username or not password:
+            return render_template("setup.html", error="All fields are required")
+        if password != confirm:
+            return render_template("setup.html", error="Passwords do not match")
+        from . import db
+
+        pwd_hash = db.hash_password(password)
+        config.update_settings(
+            HTTP_USERNAME=username, HTTP_PASSWORD_HASH=pwd_hash, SETUP_COMPLETE=True
+        )
+        from flask import session
+
+        session["logged_in"] = True
+        session.permanent = True
+        return redirect(url_for("settings"))
+    return render_template("setup.html")
+
+
+@app.route("/settings/stream_password/reset", methods=["POST"])
+@requires_session_auth
+def reset_stream_password():
+    import secrets
+
+    new_pwd = secrets.token_urlsafe(16)
+    config.update_settings(STREAM_PASSWORD=new_pwd)
+    broadcast_status()
+    return jsonify({"success": True, "password": new_pwd})
+
+
+@app.route("/settings/update", methods=["GET", "POST"])
+@requires_session_auth
+def settings_update():
+    from . import updater
+    if request.method == "POST":
+        with state.update_lock:
+            if state.update_status == "installing":
+                return jsonify({"error": "Update already in progress"}), 400
+        updater.trigger_update(triggered_by="webui")
+        return jsonify({"success": True})
+
+    latest_ver = state.latest_version
+    if not latest_ver:
+        latest_ver = updater.check_for_updates()
+
+    release_notes = ""
+    if latest_ver:
+        release_notes = updater.updater_instance.fetch_release_notes(latest_ver)
+
+    installed_ver = mqtt._get_version()
+
+    return render_template(
+        "update.html",
+        current_version=installed_ver,
+        latest_version=latest_ver,
+        release_notes=release_notes,
+        update_status=state.update_status,
+        update_error=state.update_error
+    )
+
+
+@app.route("/settings/rollback", methods=["GET", "POST"])
+@requires_session_auth
+def settings_rollback():
+    from . import updater
+    if request.method == "POST":
+        tag = request.form.get("version")
+        if not tag:
+            return jsonify({"success": False, "error": "Missing version tag"}), 400
+        try:
+            updater.updater_instance.rollback(tag, restart_callback=updater.restart_process)
+            return jsonify({"success": True})
+        except Exception:
+            safe_tag = str(tag).replace("\r", "").replace("\n", "")
+            log.exception("Rollback failed for tag '%s'", safe_tag)
+            return jsonify({"success": False, "error": "Rollback failed"}), 500
+
+    installed_versions = state.installed_versions
+    current_version = state.current_version or mqtt._get_version()
+
+    return render_template(
+        "rollback.html",
+        installed_versions=installed_versions,
+        current_version=current_version
+    )
+
+
+@app.route("/settings/db/reset", methods=["POST"])
+@requires_session_auth
+def settings_db_reset():
+    db.reset_db()
+    from . import config
+    config.load_settings()
+    return redirect(url_for("settings"))
+
+
+@app.route("/api/update/check", methods=["POST"])
+@requires_session_auth
+def api_update_check():
+    from . import updater
+
+    latest = updater.check_for_updates()
+    broadcast_status()
+    return jsonify({"success": latest is not None, "latest_version": latest})
+
+
+@app.route("/api/update/install", methods=["POST"])
+@requires_session_auth
+def api_update_install():
+
+    trigger_update(triggered_by="home_assistant")
+    broadcast_status()
+    return jsonify({"success": True})
+
+
+@app.route("/api/update/status")
+@requires_session_auth
+def api_update_status():
+    installed_version = mqtt._get_version()
+    with state.update_lock:
+        return jsonify(
+            {
+                "installed_version": installed_version,
+                "latest_version": state.latest_version,
+                "update_status": state.update_status,
+                "update_error": state.update_error,
+                "initiated_by": getattr(state, "update_initiated_by", None),
+                "db_load_error": getattr(state, "db_load_error", None),
+            }
+        )
+
+
+@app.route("/api/restart", methods=["POST"])
+@requires_session_auth
+def api_restart():
+    from . import updater
+
+    def do_restart():
+        import time
+
+        time.sleep(0.5)
+        updater.restart_process()
+
+    threading.Thread(target=do_restart, daemon=True).start()
+    return jsonify({"success": True})
+
+
+if "pytest" not in sys.modules and "unittest" not in sys.modules:
+    log.info("Starting system stats service")
+    system.start()
+    log.info("Starting MQTT service")
+    mqtt.start()
+    log.info("Starting browser service")
     try:
-        url = config.current_settings().get("HASS_DASHBOARD_URL")
-        if url:
-            import time
-            time.sleep(2)
-            browser.show_url(url)
-            log.info(f"Browser launched with URL: {url}")
+        browser.start()
     except Exception:
-        log.exception("Failed to launch browser URL")
+        log.exception("Failed to start browser service")
 
-threading.Thread(target=_launch_browser_async, daemon=True).start()
 
-start_motion_thread()
+    def _launch_browser_async():
+        try:
+            url = config.current_settings().get("HASS_DASHBOARD_URL")
+            if url:
+                import time
+
+                time.sleep(2)
+                browser.show_url(url)
+                log.info(f"Browser launched with URL: {url}")
+        except Exception:
+            log.exception("Failed to launch browser URL")
+
+
+    threading.Thread(target=_launch_browser_async, daemon=True).start()
+
+    start_motion_thread()
 _stats_broadcast_thread = None
 
 
@@ -63,14 +273,41 @@ mqtt.publish_system_ip(host)
 
 SENSITIVE_PLACEHOLDER = "__**password_not_changed**__"
 SETTINGS_KEYS = [
-    "MOTION_THRESHOLD", "INACTIVITY_TIMEOUT", "CHECK_INTERVAL",
-    "MQTT_HOST", "MQTT_PORT", "MQTT_TOPIC_PREFIX", "MQTT_USERNAME", "MQTT_PASSWORD",
-    "HTTP_USERNAME", "HTTP_PASSWORD", "HASS_DASHBOARD_URL", "BACKLIGHT_PATH", "RECORDINGS_ROOT",
-    "BRIGHTNESS_PATH", "BRIGHTNESS_MAX_PATH", "STREAM_RESOLUTION", "STREAM_FPS", "STREAM_QUALITY",
-    "OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "OVERLAY_POSITION",
-    "SERVICE_PORT", "DEBUG_MODE",
-    "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION", "RECORD_POST_MOTION_TIMEOUT",
-    "STORAGE_MAX_PERCENT", "STORAGE_FULL_ACTION", "SCREEN_CONTROL_MODE"
+    "MOTION_THRESHOLD",
+    "INACTIVITY_TIMEOUT",
+    "CHECK_INTERVAL",
+    "MQTT_HOST",
+    "MQTT_PORT",
+    "MQTT_TOPIC_PREFIX",
+    "MQTT_USERNAME",
+    "MQTT_PASSWORD",
+    "HTTP_USERNAME",
+    "HTTP_PASSWORD",
+    "HASS_DASHBOARD_URL",
+    "BACKLIGHT_PATH",
+    "RECORDINGS_ROOT",
+    "BRIGHTNESS_PATH",
+    "BRIGHTNESS_MAX_PATH",
+    "STREAM_RESOLUTION",
+    "STREAM_FPS",
+    "STREAM_QUALITY",
+    "OVERLAY_ENABLED",
+    "OVERLAY_SHOW_TIME",
+    "OVERLAY_SHOW_STATS",
+    "OVERLAY_POSITION",
+    "SERVICE_PORT",
+    "DEBUG_MODE",
+    "CAMERA_ENABLED",
+    "RECORDING_ENABLED",
+    "RECORD_ON_MOTION",
+    "RECORD_POST_MOTION_TIMEOUT",
+    "STORAGE_MAX_PERCENT",
+    "STORAGE_FULL_ACTION",
+    "SCREEN_CONTROL_MODE",
+    "STREAM_USERNAME",
+    "STREAM_PASSWORD",
+    "SECRET_KEY",
+    "UPDATE_CHANNEL",
 ]
 
 
@@ -79,12 +316,25 @@ def _parse_setting(key, val):
         return int(val)
     if key in ("INACTIVITY_TIMEOUT", "CHECK_INTERVAL"):
         return float(val)
-    if key in ("STREAM_FPS", "STREAM_QUALITY", "SERVICE_PORT", "RECORD_POST_MOTION_TIMEOUT", "STORAGE_MAX_PERCENT"):
+    if key in (
+        "STREAM_FPS",
+        "STREAM_QUALITY",
+        "SERVICE_PORT",
+        "RECORD_POST_MOTION_TIMEOUT",
+        "STORAGE_MAX_PERCENT",
+    ):
         return int(val)
-    if key in ("OVERLAY_ENABLED", "OVERLAY_SHOW_TIME", "OVERLAY_SHOW_STATS", "DEBUG_MODE",
-               "CAMERA_ENABLED", "RECORDING_ENABLED", "RECORD_ON_MOTION"):
+    if key in (
+        "OVERLAY_ENABLED",
+        "OVERLAY_SHOW_TIME",
+        "OVERLAY_SHOW_STATS",
+        "DEBUG_MODE",
+        "CAMERA_ENABLED",
+        "RECORDING_ENABLED",
+        "RECORD_ON_MOTION",
+    ):
         return val.lower() in ("true", "1", "on", "yes") if isinstance(val, str) else bool(val)
-    if key in ("MQTT_PASSWORD", "HTTP_PASSWORD"):
+    if key in ("MQTT_PASSWORD", "HTTP_PASSWORD", "STREAM_PASSWORD", "SECRET_KEY"):
         return val if val != SENSITIVE_PLACEHOLDER else None
     return val
 
@@ -93,8 +343,8 @@ def _test_path_writable(path):
     try:
         p = Path(path)
         p.mkdir(parents=True, exist_ok=True)
-        testfile = p / '.writetest'
-        testfile.write_text('ok')
+        testfile = p / ".writetest"
+        testfile.write_text("ok")
         testfile.unlink(missing_ok=True)
         return True
     except Exception:
@@ -102,7 +352,7 @@ def _test_path_writable(path):
 
 
 @app.route("/settings", methods=["GET", "POST"])
-@requires_auth
+@requires_session_auth
 def settings():
     if request.method == "POST":
         updates = {}
@@ -113,12 +363,19 @@ def settings():
             if key in ("MQTT_PASSWORD", "HTTP_PASSWORD") and val == SENSITIVE_PLACEHOLDER:
                 continue
             try:
-                updates[key] = _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+                if key == "HTTP_PASSWORD":
+                    if val and val != SENSITIVE_PLACEHOLDER:
+                        updates["HTTP_PASSWORD_HASH"] = db.hash_password(val)
+                    continue
+                updates[key] = (
+                    _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+                )
             except Exception:
                 continue
 
         if updates:
             config.update_settings(**updates)
+
             try:
                 mqtt.restart()
             except Exception:
@@ -131,17 +388,19 @@ def settings():
             if "BACKLIGHT_PATH" in updates and updates["BACKLIGHT_PATH"]:
                 bp = updates["BACKLIGHT_PATH"]
                 try:
-                    with open(bp, 'w') as f:
-                        f.write('0')
+                    with open(bp, "w") as f:
+                        f.write("0")
                     state.temp_backlight_test = {"path": bp, "writable": True}
                 except Exception:
                     state.temp_backlight_test = {"path": bp, "writable": False}
+
+
 
         return redirect(url_for("settings"))
 
     s = config.current_settings()
     pwd_display = SENSITIVE_PLACEHOLDER if s.get("MQTT_PASSWORD") else ""
-    http_pwd_display = SENSITIVE_PLACEHOLDER if s.get("HTTP_PASSWORD") else ""
+    http_pwd_display = SENSITIVE_PLACEHOLDER if s.get("HTTP_PASSWORD_HASH") else ""
 
     status = {
         "mqtt_connected": mqtt.is_connected(),
@@ -161,7 +420,9 @@ def settings():
         ctrl = browser._get_controller()
         proc = getattr(ctrl, "_proc", None)
         status["browser_running"] = proc is not None and proc.poll() is None
-        status["browser_current_url"] = ctrl.current_url or browser.get_current_url() or s.get("HASS_DASHBOARD_URL")
+        status["browser_current_url"] = (
+            ctrl.current_url or browser.get_current_url() or s.get("HASS_DASHBOARD_URL")
+        )
     except Exception:
         status["browser_running"] = False
         status["browser_current_url"] = None
@@ -176,11 +437,18 @@ def settings():
     status["recordings_root"] = rec_test["path"] if rec_test else s.get("RECORDINGS_ROOT")
     status["recordings_writable"] = rec_test["writable"] if rec_test else None
 
-    return render_template("settings.html", s=s, pwd_display=pwd_display, http_pwd_display=http_pwd_display, status=status)
+    return render_template(
+        "settings.html",
+        s=s,
+        pwd_display=pwd_display,
+        http_pwd_display=http_pwd_display,
+        status=status,
+        db_error=state.db_load_error,
+    )
 
 
 @app.route("/settings/mqtt/reconnect", methods=["POST"])
-@requires_auth
+@requires_session_auth
 def settings_mqtt_reconnect():
     try:
         mqtt.restart()
@@ -191,7 +459,7 @@ def settings_mqtt_reconnect():
 
 
 @app.route("/settings/browser/refresh", methods=["POST"])
-@requires_auth
+@requires_session_auth
 def settings_browser_refresh():
     try:
         browser.refresh()
@@ -202,7 +470,7 @@ def settings_browser_refresh():
 
 
 @app.route("/settings/restart", methods=["POST"])
-@requires_auth
+@requires_session_auth
 def settings_restart():
     try:
         mqtt.restart()
@@ -215,7 +483,7 @@ def settings_restart():
 
 
 @app.route("/stream")
-@requires_auth
+@requires_stream_auth
 def video_feed():
     if not config.current_settings().get("CAMERA_ENABLED", True):
         return "Camera is disabled", 503
@@ -253,7 +521,7 @@ def motion_alerts():
 
 
 @app.route("/settings/recording/toggle", methods=["POST"])
-@requires_auth
+@requires_session_auth
 def settings_recording_toggle():
     cfg = config.current_settings()
     if not cfg.get("RECORDING_ENABLED", True) or not cfg.get("CAMERA_ENABLED", True):
@@ -270,7 +538,7 @@ def settings_recording_toggle():
 
 
 @app.route("/settings/recording/status")
-@requires_auth
+@requires_session_auth
 def settings_recording_status():
     try:
         return {"active": recorder.is_recording(), "file": recorder.get_current_file()}, 200
@@ -285,7 +553,7 @@ def health():
 
 
 @app.route("/snapshot")
-@requires_auth
+@requires_stream_auth
 def snapshot():
     if not config.current_settings().get("CAMERA_ENABLED", True):
         return "Camera is disabled", 503
@@ -296,7 +564,9 @@ def snapshot():
         stream_settings = get_stream_settings()
         frame = cv2.resize(frame, stream_settings["resolution"])
         frame = overlay.draw_overlay(frame)
-        ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), stream_settings["quality"]])
+        ret, jpeg = cv2.imencode(
+            ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), stream_settings["quality"]]
+        )
         if ret:
             return Response(jpeg.tobytes(), mimetype="image/jpeg")
         return "Failed to capture", 500
@@ -306,7 +576,7 @@ def snapshot():
 
 
 @app.route("/api/status")
-@requires_auth
+@requires_session_auth
 def api_status():
     s = config.current_settings()
     stats = system.get_stats()
@@ -320,25 +590,27 @@ def api_status():
         browser_running = False
         browser_url = None
 
-    return jsonify({
-        "mqtt_connected": mqtt.is_connected(),
-        "motion_event": state.motion_event,
-        "display_on": state.display_on,
-        "brightness": get_brightness(),
-        "clients_connected": state.clients_connected,
-        "stream_url": state.stream_url,
-        "version": mqtt.get_system_version() or "N/A",
-        "recording_active": recorder.is_recording(),
-        "recording_file": recorder.get_current_file(),
-        "browser_running": browser_running,
-        "browser_url": browser_url,
-        "system": stats,
-        "storage": storage,
-    })
+    return jsonify(
+        {
+            "mqtt_connected": mqtt.is_connected(),
+            "motion_event": state.motion_event,
+            "display_on": state.display_on,
+            "brightness": get_brightness(),
+            "clients_connected": state.clients_connected,
+            "stream_url": state.stream_url,
+            "version": mqtt.get_system_version() or "N/A",
+            "recording_active": recorder.is_recording(),
+            "recording_file": recorder.get_current_file(),
+            "browser_running": browser_running,
+            "browser_url": browser_url,
+            "system": stats,
+            "storage": storage,
+        }
+    )
 
 
 @app.route("/api/logs")
-@requires_auth
+@requires_session_auth
 def api_logs():
     level = request.args.get("level", "").upper()
     limit = int(request.args.get("limit", 100))
@@ -347,14 +619,13 @@ def api_logs():
 
 
 @app.route("/api/settings", methods=["GET", "POST"])
-@requires_auth
+@requires_session_auth
 def api_settings():
     if request.method == "GET":
         s = config.current_settings()
         if s.get("MQTT_PASSWORD"):
             s["MQTT_PASSWORD"] = SENSITIVE_PLACEHOLDER
-        if s.get("HTTP_PASSWORD"):
-            s["HTTP_PASSWORD"] = SENSITIVE_PLACEHOLDER
+        s["HTTP_PASSWORD"] = SENSITIVE_PLACEHOLDER if s.get("HTTP_PASSWORD_HASH") else ""
         return jsonify(s)
 
     data = request.get_json()
@@ -368,7 +639,15 @@ def api_settings():
         if key in ("MQTT_PASSWORD", "HTTP_PASSWORD") and val == SENSITIVE_PLACEHOLDER:
             continue
         try:
-            updates[key] = _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+            if key == "HTTP_PASSWORD":
+                if val and val != SENSITIVE_PLACEHOLDER:
+                    from . import db
+
+                    updates["HTTP_PASSWORD_HASH"] = db.hash_password(val)
+                continue
+            updates[key] = (
+                _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+            )
         except Exception:
             continue
 
@@ -383,7 +662,7 @@ def api_settings():
 
 
 @app.route("/api/display", methods=["POST"])
-@requires_auth
+@requires_session_auth
 def api_display():
     data = request.get_json()
     if data.get("on") is not None:
@@ -434,6 +713,11 @@ def get_full_status():
         "system": stats,
         "storage": storage,
         "settings": settings_safe,
+        "update": {
+            "status": state.update_status,
+            "latest_version": state.latest_version,
+            "error": state.update_error,
+        },
     }
 
 
@@ -451,13 +735,28 @@ def broadcast_status():
         state.ws_clients -= dead
 
 
+_last_update_check = 0
+
+
 def _stats_broadcast_loop():
+    global _last_update_check
     while True:
         time.sleep(5)
         try:
             stats = system.get_stats()
             mqtt.publish_system_stats(stats)
-            mqtt.publish_storage(stats["storage_free_gb"], stats["storage_total_gb"], stats["storage_percent"])
+            mqtt.publish_storage(
+                stats["storage_free_gb"], stats["storage_total_gb"], stats["storage_percent"]
+            )
+
+            now = time.time()
+            if now - _last_update_check > 3600:
+                _last_update_check = now
+                from . import updater
+
+                threading.Thread(target=updater.check_for_updates, daemon=True).start()
+
+            mqtt.publish_update_state()
             broadcast_status()
         except Exception:
             pass
@@ -471,10 +770,12 @@ def start_stats_broadcast():
     _stats_broadcast_thread.start()
 
 
-start_stats_broadcast()
+if "pytest" not in sys.modules and "unittest" not in sys.modules:
+    start_stats_broadcast()
 
 
 if WEBSOCKET_ENABLED:
+
     @sock.route("/ws")
     def websocket(ws):
         with state.ws_clients_lock:
@@ -524,11 +825,12 @@ if WEBSOCKET_ENABLED:
                     elif action == "restart_system_service":
                         try:
                             import subprocess
+
                             subprocess.run(
                                 ["sudo", "systemctl", "restart", "wakeonpi"],
                                 capture_output=True,
                                 text=True,
-                                timeout=30
+                                timeout=30,
                             )
                         except Exception:
                             log.exception("Failed to restart system service")
@@ -538,10 +840,17 @@ if WEBSOCKET_ENABLED:
                         for key, val in data.get("settings", {}).items():
                             if key not in SETTINGS_KEYS:
                                 continue
-                            if key in ("MQTT_PASSWORD", "HTTP_PASSWORD") and val == SENSITIVE_PLACEHOLDER:
+                            if (
+                                key in ("MQTT_PASSWORD", "HTTP_PASSWORD")
+                                and val == SENSITIVE_PLACEHOLDER
+                            ):
                                 continue
                             try:
-                                updates[key] = _parse_setting(key, val) if val else (None if key.endswith("PASSWORD") else val)
+                                updates[key] = (
+                                    _parse_setting(key, val)
+                                    if val
+                                    else (None if key.endswith("PASSWORD") else val)
+                                )
                             except Exception:
                                 continue
                         if updates:
@@ -550,6 +859,7 @@ if WEBSOCKET_ENABLED:
                                 reconfigure_camera()
                             if "SCREEN_CONTROL_MODE" in updates:
                                 from . import motion as motion_module
+
                                 motion_module.apply_screen_mode()
                                 mqtt.publish_screen_mode(updates["SCREEN_CONTROL_MODE"])
                             mqtt.restart()

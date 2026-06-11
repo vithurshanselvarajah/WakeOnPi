@@ -35,11 +35,13 @@ def _on_connect(client, userdata, flags, rc):
     client.subscribe(f"{prefix}/command/browser/refresh")
     client.subscribe(f"{prefix}/command/recording/toggle")
     client.subscribe(f"{prefix}/command/settings/update")
+    client.subscribe(f"{prefix}/command/update/install")
 
     try:
         ip = state.get_system_ip()
         publish_system_ip(ip)
         from . import browser
+
         bro = browser.get_current_url()
         if bro:
             publish_browser_url(bro)
@@ -47,6 +49,7 @@ def _on_connect(client, userdata, flags, rc):
             publish_browser_url(state.browser_url)
         try:
             from . import recorder
+
             publish_recording_state(recorder.is_recording())
         except Exception:
             pass
@@ -88,7 +91,7 @@ def _get_pi_model():
     try:
         model_path = Path("/proc/device-tree/model")
         if model_path.exists():
-            model = model_path.read_text().strip().rstrip('\x00')
+            model = model_path.read_text().strip().rstrip("\x00")
             return model
     except Exception:
         pass
@@ -119,6 +122,7 @@ def _on_message(client, userdata, msg):
         elif msg.topic == f"{prefix}/command/browser/url_set":
             try:
                 from . import browser
+
                 browser.show_url(payload, force=True, one_shot=True)
                 publish_browser_url(payload)
             except Exception:
@@ -127,6 +131,7 @@ def _on_message(client, userdata, msg):
         elif msg.topic == f"{prefix}/command/browser/refresh":
             try:
                 from . import browser
+
                 browser.refresh()
             except Exception:
                 log.exception("Failed to refresh browser")
@@ -142,6 +147,7 @@ def _on_message(client, userdata, msg):
                     return
 
                 from . import recorder
+
                 if recorder.is_recording():
                     recorder.stop_recording()
                     publish_recording_state(False)
@@ -162,6 +168,7 @@ def _on_message(client, userdata, msg):
                     restart()
                     try:
                         from . import browser
+
                         browser.stop()
                         browser.start()
                     except Exception:
@@ -184,11 +191,22 @@ def _on_message(client, userdata, msg):
                     config.update_settings(SCREEN_CONTROL_MODE=mode)
                     publish_screen_mode(mode)
                     from . import motion
+
                     motion.apply_screen_mode()
                 else:
                     log.warning(f"Invalid screen mode: {mode}")
             except Exception:
                 log.exception("Failed to set screen mode")
+
+        elif msg.topic == f"{prefix}/command/update/install":
+            try:
+                if payload == "install":
+                    log.info("Update installation requested via MQTT")
+                    from . import updater
+
+                    updater.trigger_update()
+            except Exception:
+                log.exception("Failed to start update via MQTT")
 
     except Exception:
         log.exception("Error in MQTT message handler")
@@ -265,22 +283,33 @@ def start():
         _connected = False
         return
 
-    _client = mqtt.Client()
-    if cfg.get("MQTT_USERNAME"):
-        _client.username_pw_set(cfg.get("MQTT_USERNAME"), cfg.get("MQTT_PASSWORD"))
-    _client.on_connect = _on_connect
-    _client.on_message = _on_message
-    _client.on_disconnect = _on_disconnect
-    try:
-        host = cfg.get("MQTT_HOST") or "localhost"
-        port = int(cfg.get("MQTT_PORT") or 1883)
-        log.info(f"Connecting to MQTT {host}:{port}")
-        _client.connect(host, port)
-        threading.Thread(target=_client.loop_forever, daemon=True).start()
-    except Exception:
-        log.exception("MQTT connect error")
-        _connected = False
-        _start_reconnect_thread()
+    def _connect_async():
+        global _client, _connected
+        try:
+            import socket
+            socket.gethostbyname(host)
+        except Exception as resolve_err:
+            log.warning(f"Cannot resolve MQTT host '{host}': {resolve_err}; disabling MQTT")
+            _connected = False
+            return
+
+        _client = mqtt.Client()
+        if cfg.get("MQTT_USERNAME"):
+            _client.username_pw_set(cfg.get("MQTT_USERNAME"), cfg.get("MQTT_PASSWORD"))
+        _client.on_connect = _on_connect
+        _client.on_message = _on_message
+        _client.on_disconnect = _on_disconnect
+        try:
+            port = int(cfg.get("MQTT_PORT") or 1883)
+            log.info(f"Connecting to MQTT {host}:{port}")
+            _client.connect(host, port)
+            threading.Thread(target=_client.loop_forever, daemon=True).start()
+        except Exception:
+            log.exception("MQTT connect error")
+            _connected = False
+            _start_reconnect_thread()
+
+    threading.Thread(target=_connect_async, daemon=True).start()
 
 
 def stop():
@@ -365,6 +394,21 @@ def publish_system_stats(stats):
     publish_state("system/uptime", str(stats.get("uptime", 0)))
 
 
+def publish_update_state():
+    version = _get_version()
+    latest = state.latest_version or version
+    status = state.update_status
+
+    payload = {
+        "installed_version": str(version),
+        "latest_version": str(latest),
+        "title": "WakeOnPi",
+        "release_url": "https://github.com/vithurshanselvarajah/WakeOnPi/releases",
+        "update_status": "installing" if status == "installing" else "idle",
+    }
+    publish("state/update", json.dumps(payload))
+
+
 def get_system_version():
     return _last_version
 
@@ -391,118 +435,199 @@ def _publish_ha_discovery(prefix):
     }
 
     discoveries = [
-        ("binary_sensor", f"{prefix}_motion", {
-            "name": "Motion",
-            "device_class": "motion",
-            "state_topic": f"{prefix}/state/motion",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:motion-sensor",
-        }),
-        ("switch", f"{prefix}_screen", {
-            "name": "Screen",
-            "device_class": "switch",
-            "command_topic": f"{prefix}/command/screen/set",
-            "state_topic": f"{prefix}/state/screen",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:monitor",
-        }),
-        ("select", f"{prefix}_screen_mode", {
-            "name": "Screen Control Mode",
-            "command_topic": f"{prefix}/command/screen/mode",
-            "state_topic": f"{prefix}/state/screen/mode",
-            "options": ["auto", "always_on", "always_off"],
-            "icon": "mdi:monitor-screenshot",
-        }),
-        ("number", f"{prefix}_brightness", {
-            "name": "Brightness",
-            "command_topic": f"{prefix}/command/screen/brightness",
-            "state_topic": f"{prefix}/state/screen/brightness",
-            "min": 5,
-            "max": 100,
-            "step": 5,
-            "unit_of_measurement": "%",
-            "icon": "mdi:brightness-6",
-        }),
-        ("sensor", f"{prefix}_version", {
-            "name": "Version",
-            "state_topic": f"{prefix}/state/system/version",
-            "icon": "mdi:information-outline",
-        }),
-        ("text", f"{prefix}_browser_url", {
-            "name": "Browser URL",
-            "state_topic": f"{prefix}/state/browser/url",
-            "command_topic": f"{prefix}/command/browser/url_set",
-            "icon": "mdi:web",
-        }),
-        ("button", f"{prefix}_browser_refresh", {
-            "name": "Browser Refresh",
-            "command_topic": f"{prefix}/command/browser/refresh",
-            "icon": "mdi:refresh",
-        }),
-        ("sensor", f"{prefix}_system_ip", {
-            "name": "System IP",
-            "state_topic": f"{prefix}/state/system/ip",
-            "icon": "mdi:ip-network",
-        }),
-        ("sensor", f"{prefix}_cpu_temp", {
-            "name": "CPU Temperature",
-            "device_class": "temperature",
-            "state_topic": f"{prefix}/state/system/cpu_temp",
-            "unit_of_measurement": "°C",
-            "icon": "mdi:thermometer",
-        }),
-        ("sensor", f"{prefix}_cpu_usage", {
-            "name": "CPU Usage",
-            "state_topic": f"{prefix}/state/system/cpu_usage",
-            "unit_of_measurement": "%",
-            "icon": "mdi:cpu-64-bit",
-        }),
-        ("sensor", f"{prefix}_memory", {
-            "name": "Memory Usage",
-            "state_topic": f"{prefix}/state/system/memory_percent",
-            "unit_of_measurement": "%",
-            "icon": "mdi:memory",
-        }),
-        ("sensor", f"{prefix}_uptime", {
-            "name": "Uptime",
-            "device_class": "duration",
-            "state_topic": f"{prefix}/state/system/uptime",
-            "unit_of_measurement": "s",
-            "icon": "mdi:timer-outline",
-        }),
-        ("sensor", f"{prefix}_storage_free", {
-            "name": "Storage Free",
-            "device_class": "data_size",
-            "state_topic": f"{prefix}/state/storage/free_gb",
-            "unit_of_measurement": "GB",
-            "icon": "mdi:harddisk",
-        }),
-        ("sensor", f"{prefix}_storage_used", {
-            "name": "Storage Used",
-            "state_topic": f"{prefix}/state/storage/used_percent",
-            "unit_of_measurement": "%",
-            "icon": "mdi:chart-pie",
-        }),
+        (
+            "binary_sensor",
+            f"{prefix}_motion",
+            {
+                "name": "Motion",
+                "device_class": "motion",
+                "state_topic": f"{prefix}/state/motion",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "icon": "mdi:motion-sensor",
+            },
+        ),
+        (
+            "switch",
+            f"{prefix}_screen",
+            {
+                "name": "Screen",
+                "device_class": "switch",
+                "command_topic": f"{prefix}/command/screen/set",
+                "state_topic": f"{prefix}/state/screen",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "icon": "mdi:monitor",
+            },
+        ),
+        (
+            "select",
+            f"{prefix}_screen_mode",
+            {
+                "name": "Screen Control Mode",
+                "command_topic": f"{prefix}/command/screen/mode",
+                "state_topic": f"{prefix}/state/screen/mode",
+                "options": ["auto", "always_on", "always_off"],
+                "icon": "mdi:monitor-screenshot",
+            },
+        ),
+        (
+            "number",
+            f"{prefix}_brightness",
+            {
+                "name": "Brightness",
+                "command_topic": f"{prefix}/command/screen/brightness",
+                "state_topic": f"{prefix}/state/screen/brightness",
+                "min": 5,
+                "max": 100,
+                "step": 5,
+                "unit_of_measurement": "%",
+                "icon": "mdi:brightness-6",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_version",
+            {
+                "name": "Version",
+                "state_topic": f"{prefix}/state/system/version",
+                "icon": "mdi:information-outline",
+            },
+        ),
+        (
+            "text",
+            f"{prefix}_browser_url",
+            {
+                "name": "Browser URL",
+                "state_topic": f"{prefix}/state/browser/url",
+                "command_topic": f"{prefix}/command/browser/url_set",
+                "icon": "mdi:web",
+            },
+        ),
+        (
+            "button",
+            f"{prefix}_browser_refresh",
+            {
+                "name": "Browser Refresh",
+                "command_topic": f"{prefix}/command/browser/refresh",
+                "icon": "mdi:refresh",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_system_ip",
+            {
+                "name": "System IP",
+                "state_topic": f"{prefix}/state/system/ip",
+                "icon": "mdi:ip-network",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_cpu_temp",
+            {
+                "name": "CPU Temperature",
+                "device_class": "temperature",
+                "state_topic": f"{prefix}/state/system/cpu_temp",
+                "unit_of_measurement": "°C",
+                "icon": "mdi:thermometer",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_cpu_usage",
+            {
+                "name": "CPU Usage",
+                "state_topic": f"{prefix}/state/system/cpu_usage",
+                "unit_of_measurement": "%",
+                "icon": "mdi:cpu-64-bit",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_memory",
+            {
+                "name": "Memory Usage",
+                "state_topic": f"{prefix}/state/system/memory_percent",
+                "unit_of_measurement": "%",
+                "icon": "mdi:memory",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_uptime",
+            {
+                "name": "Uptime",
+                "device_class": "duration",
+                "state_topic": f"{prefix}/state/system/uptime",
+                "unit_of_measurement": "s",
+                "icon": "mdi:timer-outline",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_storage_free",
+            {
+                "name": "Storage Free",
+                "device_class": "data_size",
+                "state_topic": f"{prefix}/state/storage/free_gb",
+                "unit_of_measurement": "GB",
+                "icon": "mdi:harddisk",
+            },
+        ),
+        (
+            "sensor",
+            f"{prefix}_storage_used",
+            {
+                "name": "Storage Used",
+                "state_topic": f"{prefix}/state/storage/used_percent",
+                "unit_of_measurement": "%",
+                "icon": "mdi:chart-pie",
+            },
+        ),
+        (
+            "update",
+            f"{prefix}_update",
+            {
+                "name": "Update",
+                "device_class": "firmware",
+                "state_topic": f"{prefix}/state/update",
+                "command_topic": f"{prefix}/command/update/install",
+                "payload_install": "install",
+                "latest_version_template": "{{ value_json.latest_version }}",
+                "installed_version_template": "{{ value_json.installed_version }}",
+                "title_template": "{{ value_json.title }}",
+                "release_url_template": "{{ value_json.release_url }}",
+                "update_status_template": "{{ value_json.update_status }}",
+                "icon": "mdi:cellphone-arrow-down",
+            },
+        ),
     ]
 
     if recording_enabled and camera_enabled:
-        discoveries.append(("switch", f"{prefix}_recording", {
-            "name": "Recording",
-            "command_topic": f"{prefix}/command/recording/toggle",
-            "state_topic": f"{prefix}/state/recording/active",
-            "payload_on": "ON",
-            "payload_off": "OFF",
-            "icon": "mdi:record-rec",
-        }))
+        discoveries.append(
+            (
+                "switch",
+                f"{prefix}_recording",
+                {
+                    "name": "Recording",
+                    "command_topic": f"{prefix}/command/recording/toggle",
+                    "state_topic": f"{prefix}/state/recording/active",
+                    "payload_on": "ON",
+                    "payload_off": "OFF",
+                    "icon": "mdi:record-rec",
+                },
+            )
+        )
 
     for component, unique_id, payload in discoveries:
         payload["unique_id"] = unique_id
         payload["device"] = device
         payload["availability_topic"] = f"{prefix}/state/availability"
         try:
-            _client.publish(f"homeassistant/{component}/{unique_id}/config", json.dumps(payload), retain=True)
+            _client.publish(
+                f"homeassistant/{component}/{unique_id}/config", json.dumps(payload), retain=True
+            )
         except Exception:
             log.exception(f"Failed to publish HA {component} discovery")
 

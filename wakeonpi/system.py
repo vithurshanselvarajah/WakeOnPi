@@ -65,14 +65,10 @@ def get_storage_info(path=None):
         st = os.statvfs(str(p))
         total = st.f_blocks * st.f_frsize
         free = st.f_bavail * st.f_frsize
-        total_gb = round(total / (1024 ** 3), 2)
-        free_gb = round(free / (1024 ** 3), 2)
+        total_gb = round(total / (1024**3), 2)
+        free_gb = round(free / (1024**3), 2)
         used_percent = round(((total - free) / total) * 100, 1) if total > 0 else 0
-        return {
-            "total_gb": total_gb,
-            "free_gb": free_gb,
-            "used_percent": used_percent
-        }
+        return {"total_gb": total_gb, "free_gb": free_gb, "used_percent": used_percent}
     except Exception:
         return {"total_gb": 0, "free_gb": 0, "used_percent": 0}
 
