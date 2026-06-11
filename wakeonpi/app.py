@@ -162,7 +162,8 @@ def settings_rollback():
             updater.updater_instance.rollback(tag)
             return jsonify({"success": True})
         except Exception:
-            log.exception("Rollback failed for tag '%s'", tag)
+            safe_tag = str(tag).replace("\r", "").replace("\n", "")
+            log.exception("Rollback failed for tag '%s'", safe_tag)
             return jsonify({"success": False, "error": "Rollback failed"}), 500
 
     installed_versions = state.installed_versions
