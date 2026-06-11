@@ -2,14 +2,16 @@
 
 ## Prerequisites
 
-- Raspberry Pi (3, 4, or 5 recommended) running Raspberry Pi OS or similar Linux distribution
-- Python 3.14
-- Camera module connected and enabled
-- pip (Python package manager)
+- Raspberry Pi (3, 4, or 5 recommended) running Raspberry Pi OS or similar Linux distribution.
+- Python 3.14 or later.
+- Camera module connected and enabled.
+- pip (Python package manager).
+
+---
 
 ## System Dependencies
 
-Before installing Python dependencies, install required system packages:
+Before installing Python dependencies, install the required system packages:
 
 ```bash
 sudo apt-get update
@@ -25,136 +27,122 @@ sudo apt-get install -y \
     libtk8.6 \
     libopenjp2-7 \
     libopenjp2-7-dev \
-    libjasper-dev \
     libopenblas-dev
 ```
 
+---
+
 ## Camera Setup
 
-Ensure your camera is enabled:
+Ensure your Raspberry Pi camera interface is enabled:
 
 ```bash
 sudo raspi-config
 ```
 
-Navigate to `Interface Options` → `Camera` and enable it.
+Navigate to `Interface Options` → `Camera` and select `Yes` to enable it, then reboot.
 
-## Installation
+---
 
-1. Clone the repository:
+## Installation Steps
 
-```bash
-git clone https://github.com/yourusername/WakeOnPi.git
-cd WakeOnPi
-```
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/vithurshanselvarajah/WakeOnPi.git
+   cd WakeOnPi
+   ```
 
-2. Create a virtual environment:
+2. **Create a Virtual Environment**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+3. **Install Python Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Configuration
-
-Create a `.env` file in the project root with your settings:
-
-```env
-# Authentication
-AUTH_USERNAME=admin
-AUTH_PASSWORD=your_secure_password
-
-# MQTT (optional)
-MQTT_BROKER=192.168.1.100
-MQTT_PORT=1883
-MQTT_USERNAME=mqtt_user
-MQTT_PASSWORD=mqtt_password
-MQTT_TOPIC_PREFIX=wakeonpi
-
-# Display
-DISPLAY_BRIGHTNESS_PATH=/sys/class/backlight/rpi_backlight/brightness
-DISPLAY_MAX_BRIGHTNESS_PATH=/sys/class/backlight/rpi_backlight/max_brightness
-
-# Camera
-CAMERA_ROTATION=0
-CAMERA_FRAMERATE=30
-
-# Motion Detection
-MOTION_THRESHOLD=5.0
-MOTION_MIN_AREA=500
-```
+---
 
 ## Running WakeOnPi
+
+Start the application using the entry point:
 
 ```bash
 python3 run.py
 ```
 
-The application will start on `http://localhost:5000`
+The Web server starts on `http://0.0.0.0:5000`.
 
-Access the settings dashboard at:
-```
-http://<your-pi-ip>:5000/settings
-```
+---
 
-## Running as a Service
+## First-Time Configuration
 
-To run WakeOnPi on startup, create a systemd service file:
+1. Open your browser and navigate to:
+   ```text
+   http://<your-pi-ip>:5000/settings
+   ```
+2. Because the database is unconfigured, you will be redirected to the **Setup Wizard** (`/setup`).
+3. Set your administrative username and password.
+4. Log in at `/login` to access the Settings Dashboard where you can configure:
+   - **Backlight Paths** for screen power control.
+   - **MQTT Connection** settings.
+   - **Motion Detection** threshold levels.
+   - **Video Recording** folders.
 
-```bash
-sudo nano /etc/systemd/system/wakeonpi.service
-```
+---
 
-Add the following:
+## Running as a systemd Service
 
-```ini
-[Unit]
-Description=WakeOnPi - Raspberry Pi Camera Service
-After=network.target
+To run WakeOnPi automatically on startup as a background service:
 
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/WakeOnPi
-ExecStart=/home/pi/WakeOnPi/venv/bin/python3 run.py
-Restart=on-failure
-RestartSec=10
+1. Create a service file:
+   ```bash
+   sudo nano /etc/systemd/system/wakeonpi.service
+   ```
 
-[Install]
-WantedBy=multi-user.target
-```
+2. Paste the following configuration:
+   ```ini
+   [Unit]
+   Description=WakeOnPi - Raspberry Pi Camera & Screen Service
+   After=network.target
 
-Enable and start the service:
+   [Service]
+   Type=simple
+   User=pi
+   WorkingDirectory=/home/pi/WakeOnPi
+   ExecStart=/home/pi/WakeOnPi/venv/bin/python3 run.py
+   Restart=on-failure
+   RestartSec=10
 
-```bash
-sudo systemctl enable wakeonpi
-sudo systemctl start wakeonpi
-```
+   [Install]
+   WantedBy=multi-user.target
+   ```
 
-Check status:
+3. Reload systemd, enable, and start the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable wakeonpi.service
+   sudo systemctl start wakeonpi.service
+   ```
 
-```bash
-sudo systemctl status wakeonpi
-```
+4. Verify service status:
+   ```bash
+   sudo systemctl status wakeonpi.service
+   ```
+
+---
 
 ## Troubleshooting
 
-### Camera not detected
-- Verify camera is connected and enabled via `raspi-config`
-- Check camera permissions: `ls -la /dev/video*`
+### Camera Not Detected
+- Verify the physical connection.
+- Ensure the user running the service belongs to the video group:
+  ```bash
+  sudo usermod -a -G video pi
+  ```
 
-### Permission errors
-- Ensure the user running WakeOnPi has permission to access camera and display
-- Add user to required groups: `sudo usermod -a -G video,gpio pi`
-
-### Display control not working
-- Verify backlight path exists: `ls /sys/class/backlight/`
-- Check permissions for backlight control
-
-For more help, refer to the main repository issues.
+### Screen Control Failures
+- Verify your backlight sysfs path exists: `ls /sys/class/backlight/`
+- Ensure the user has write permissions to `/sys/class/backlight/.../bl_power` or similar control endpoints.

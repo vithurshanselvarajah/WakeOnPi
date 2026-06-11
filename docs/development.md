@@ -34,19 +34,9 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt  # Development dependencies
 ```
 
-### 4. Configure Environment
+### 4. Configure Database
 
-Create `.env.development`:
-
-```env
-FLASK_DEBUG=true
-FLASK_ENV=development
-AUTH_USERNAME=dev
-AUTH_PASSWORD=dev
-LOG_LEVEL=DEBUG
-MOTION_ENABLED=false
-MQTT_ENABLED=false
-```
+On first boot, the application automatically creates an internal SQLite database at `wakeonpi/wakeonpi.db`. There is no manual configuration file setup required.
 
 ### 5. Run Development Server
 
@@ -54,7 +44,7 @@ MQTT_ENABLED=false
 python3 run.py
 ```
 
-Visit `http://localhost:5000/settings`
+Visit `http://localhost:5000/settings` and complete the initial **Setup Wizard** to create administrative credentials.
 
 ## Project Structure
 
@@ -312,7 +302,7 @@ GitHub Actions runs on every push:
 ### MQTT connection failures
 - Verify broker is running
 - Check network connectivity
-- Validate credentials in `.env`
+- Validate credentials in settings database
 
 ### Display control errors
 - Verify sysfs path exists
