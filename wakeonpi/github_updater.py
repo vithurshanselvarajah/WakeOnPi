@@ -7,7 +7,7 @@ import hashlib
 import zipfile
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from . import state
 
@@ -124,13 +124,13 @@ class GitHubReleaseUpdater:
         self._save_manifest()
         self.prune_versions(except_tag=tag)
 
-    def rollback(self, tag: str) -> None:
+    def rollback(self, tag: str, restart_callback: Optional[Callable[[], None]] = None) -> None:
         if tag not in state.installed_versions:
             raise RuntimeError(f"Tag {tag} is not installed")
         state.current_version = tag
         self._save_manifest()
-        from .updater import restart_process
-        restart_process()
+        if restart_callback is not None:
+            restart_callback()
 
     def prune_versions(self, except_tag: Optional[str] = None) -> None:
         for v in list(state.installed_versions):
