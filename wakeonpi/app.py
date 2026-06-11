@@ -161,8 +161,9 @@ def settings_rollback():
         try:
             updater.updater_instance.rollback(tag)
             return jsonify({"success": True})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 500
+        except Exception:
+            log.exception("Rollback failed for tag '%s'", tag)
+            return jsonify({"success": False, "error": "Rollback failed"}), 500
 
     installed_versions = state.installed_versions
     current_version = state.current_version or mqtt._get_version()
