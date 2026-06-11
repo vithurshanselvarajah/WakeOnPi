@@ -36,16 +36,63 @@ jobs:
             VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Generate release notes from commits
-        id: notes
+      - name: Get commits since last release
+        id: commits
         shell: bash
         run: |
-          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^v' | head -2 | tail -1 | sed 's/^v//')
+          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^v' | head -1)
           if [ -z "$PREV_TAG" ]; then
-            git log --pretty=format:"- %s" > release-notes.md
+            COMMITS=$(git log --pretty=format:"- %s")
           else
-            git log v$PREV_TAG..HEAD --pretty=format:"- %s" > release-notes.md
+            COMMITS=$(git log "$PREV_TAG..HEAD" --pretty=format:"- %s")
           fi
+          echo "commits<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$COMMITS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+      - name: Generate changelog with GitHub AI
+        id: ai_changelog
+        continue-on-error: true
+        uses: actions/ai-inference@v2
+        with:
+          model: openai/gpt-4o
+          max-tokens: 700
+          system-prompt: >-
+            You write concise GitHub release notes for a Raspberry Pi camera custom
+            integration. Use Markdown bullets. Do not invent changes. Use the
+            commit subject, body, and changed files to summarize what changed.
+          prompt: |
+            Create release notes for WakeOnPi.
+
+            Version: ${{ steps.version.outputs.version }}
+            Tag: v${{ steps.version.outputs.version }}
+
+            Commits:
+            ${{ steps.commits.outputs.commits }}
+      - name: Write release notes
+        env:
+          AI_NOTES_FILE: ${{ steps.ai_changelog.outputs.response-file }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: v${{ steps.version.outputs.version }}
+          COMMITS: ${{ steps.commits.outputs.commits }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# WakeOnPi ${VERSION}"
+            echo
+            if [[ -n "${AI_NOTES_FILE:-}" && -s "$AI_NOTES_FILE" ]]; then
+              cat "$AI_NOTES_FILE"
+            else
+              echo "## Changes"
+              echo
+              if [[ -n "$COMMITS" ]]; then
+                echo "$COMMITS"
+              else
+                echo "- Release ${TAG}"
+              fi
+            fi
+          } > release-notes.md
       - name: Create source zip and checksum
         id: assets
         shell: bash
