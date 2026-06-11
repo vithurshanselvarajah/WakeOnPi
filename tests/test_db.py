@@ -1,5 +1,6 @@
 import unittest
 import os
+import gc
 from pathlib import Path
 from wakeonpi import db, state
 
@@ -13,6 +14,7 @@ class TestDatabaseOperations(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         db.DB_FILE = cls.original_db_file
+        gc.collect()
         if cls.test_db_file.exists():
             try:
                 os.remove(cls.test_db_file)
@@ -23,9 +25,12 @@ class TestDatabaseOperations(unittest.TestCase):
         db.DB_FILE = self.test_db_file
         db.init_db()
         try:
-            with db.get_db_connection() as conn:
+            conn = db.get_db_connection()
+            try:
                 conn.execute("DELETE FROM settings")
                 conn.commit()
+            finally:
+                conn.close()
         except Exception as e:
             self.fail(f"Failed to reset settings table during test setup: {e}")
 
@@ -66,9 +71,12 @@ class TestDatabaseOperations(unittest.TestCase):
     @unittest.mock.patch("wakeonpi.db.os.remove")
     def test_reset_db(self, mock_remove):
         def fake_remove(path):
-            with db.get_db_connection() as conn:
+            conn = db.get_db_connection()
+            try:
                 conn.execute("DELETE FROM settings")
                 conn.commit()
+            finally:
+                conn.close()
         mock_remove.side_effect = fake_remove
 
         db.set_setting("KEY_TO_RESET", "VALUE")

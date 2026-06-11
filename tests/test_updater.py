@@ -201,7 +201,7 @@ class TestGitHubReleaseUpdater(unittest.TestCase):
         state.installed_versions = ["0.0.14", "0.0.15"]
         state.current_version = "0.0.15"
 
-        self.updater.rollback("0.0.14")
+        self.updater.rollback("0.0.14", restart_callback=updater.restart_process)
         self.assertEqual(state.current_version, "0.0.14")
         mock_restart.assert_called_once()
 

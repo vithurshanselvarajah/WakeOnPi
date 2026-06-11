@@ -159,7 +159,7 @@ def settings_rollback():
         if not tag:
             return jsonify({"success": False, "error": "Missing version tag"}), 400
         try:
-            updater.updater_instance.rollback(tag)
+            updater.updater_instance.rollback(tag, restart_callback=updater.restart_process)
             return jsonify({"success": True})
         except Exception:
             safe_tag = str(tag).replace("\r", "").replace("\n", "")

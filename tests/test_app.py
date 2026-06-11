@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from wakeonpi import app, state, config
+from wakeonpi import app, state, config, updater
 
 
 class TestAppIntegration(unittest.TestCase):
@@ -73,7 +73,7 @@ class TestAppIntegration(unittest.TestCase):
         resp = self.client.post("/settings/rollback", data={"version": "0.0.10"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json, {"success": True})
-        mock_updater.rollback.assert_called_once_with("0.0.10")
+        mock_updater.rollback.assert_called_once_with("0.0.10", restart_callback=updater.restart_process)
 
     @patch('wakeonpi.updater.updater_instance')
     def test_settings_rollback_post_failure(self, mock_updater):
@@ -81,7 +81,7 @@ class TestAppIntegration(unittest.TestCase):
 
         resp = self.client.post("/settings/rollback", data={"version": "0.0.10"})
         self.assertEqual(resp.status_code, 500)
-        self.assertEqual(resp.json, {"success": False, "error": "Rollback error"})
+        self.assertEqual(resp.json, {"success": False, "error": "Rollback failed"})
 
     @patch('wakeonpi.db.reset_db')
     def test_settings_db_reset_post(self, mock_reset):
