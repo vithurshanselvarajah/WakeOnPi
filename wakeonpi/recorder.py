@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import logging
 
-from . import camera, config
+from . import camera, config, mqtt, state
 
 log = logging.getLogger("Recorder")
 
@@ -25,30 +25,48 @@ class Recorder:
 
     def _record_loop(self, path):
         try:
+            with state.clients_lock:
+                state.clients_connected += 1
+                mqtt.publish_clients_connected(state.clients_connected)
+
             camera.switch_to_full_mode()
             time.sleep(0.5)
+
             picam2 = camera.picam2
             frame = picam2.capture_array("main")
             h, w = frame.shape[:2]
+
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             out = cv2.VideoWriter(path, fourcc, 10.0, (w, h))
+
             if not out.isOpened():
                 log.error(f"Failed to open VideoWriter for {path}")
                 return
+
             while not self._stop.is_set():
                 frame = picam2.capture_array("main")
+
                 try:
                     bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 except Exception:
                     bgr = frame
+
                 out.write(bgr)
                 time.sleep(0.1)
+
             out.release()
+
         except Exception:
             log.exception("Recording loop failed")
+
         finally:
             try:
+                with state.clients_lock:
+                    state.clients_connected -= 1
+                    mqtt.publish_clients_connected(state.clients_connected)
+
                 camera.switch_to_lores_mode_if_needed()
+
             except Exception:
                 pass
 
