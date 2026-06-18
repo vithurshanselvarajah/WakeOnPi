@@ -179,9 +179,9 @@ Write tests for new functionality.
 
 ### 4. Update Documentation
 
-- Update [Architecture](./architecture.md) if adding new modules
-- Update [API Reference](./api.md) if adding endpoints
-- Update [Configuration](./configuration.md) if adding settings
+- Update [Architecture](./architecture) if adding new modules
+- Update [API Reference](./api) if adding endpoints
+- Update [Configuration](./configuration) if adding settings
 
 ### 5. Create Pull Request
 
@@ -312,8 +312,8 @@ GitHub Actions runs on every push:
 ## Getting Help
 
 - Check existing [GitHub Issues](https://github.com/yourusername/WakeOnPi/issues)
-- Review [Architecture Documentation](./architecture.md)
-- Check [Configuration Guide](./configuration.md)
+- Review [Architecture Documentation](./architecture)
+- Check [Configuration Guide](./configuration)
 - Ask in project discussions
 
 ## Resources
