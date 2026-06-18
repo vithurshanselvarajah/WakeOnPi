@@ -35,7 +35,9 @@ def _cast_value(key, value):
         return value
     default_val = DEFAULTS[key]
     if isinstance(default_val, bool):
-        return value.lower() in ("true", "1", "yes", "on")
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() in ("true", "1", "yes", "on")
     if isinstance(default_val, int):
         try:
             return int(value)
@@ -124,7 +126,7 @@ def update_settings(**kwargs):
 
     for k, v in kwargs.items():
         if k in _settings:
-            _settings[k] = v
+            _settings[k] = _cast_value(k, v)
     _save(_settings)
 
     MOTION_THRESHOLD = _settings["MOTION_THRESHOLD"]

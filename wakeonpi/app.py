@@ -104,6 +104,8 @@ def setup():
         config.update_settings(
             HTTP_USERNAME=username, HTTP_PASSWORD_HASH=pwd_hash, SETUP_COMPLETE=True
         )
+        # Reload settings to ensure in-memory cache reflects database changes
+        config.load_settings()
         from flask import session
 
         session["logged_in"] = True
@@ -379,11 +381,12 @@ def settings():
 
         if updates:
             config.update_settings(**updates)
+            config.load_settings()
 
             try:
                 mqtt.restart()
             except Exception:
-                log.exception("Failed to restart MQTT after settings change")
+                log.exception("Failed to restart MQTT after settings update")
 
             if "RECORDINGS_ROOT" in updates:
                 rr = updates["RECORDINGS_ROOT"] or config.RECORDINGS_ROOT
