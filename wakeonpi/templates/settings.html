@@ -1301,6 +1301,14 @@
       }
     }
 
+    // Pre-populate settings from server-rendered data immediately (before WebSocket connects)
+    (function() {
+      const initialSettings = {{ json_settings | tojson }};
+      if (initialSettings && Object.keys(initialSettings).length > 0) {
+        updateUI({ type: 'status', settings: initialSettings });
+      }
+    })();
+
     // Don't auto-refresh preview - only refresh on manual button click
     connectWebSocket();
   </script>

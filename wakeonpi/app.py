@@ -451,6 +451,7 @@ def settings():
         http_pwd_display=http_pwd_display,
         status=status,
         db_error=state.db_load_error,
+        json_settings=json.dumps(s),
     )
 
 
