@@ -40,7 +40,6 @@ http://<pi-ip>:5000/stream
 
 ## Main endpoints
 
-- `GET /` - Redirects to `/setup` (first run) or `/settings` (after setup)
 - `GET /setup` - First-time setup wizard (create admin account)
 - `GET /login` / `/logout` - WebUI session management (redirects to `/setup` if no account exists)
 - `GET /settings` - settings dashboard (session auth)
@@ -57,9 +56,9 @@ http://<pi-ip>:5000/stream
 
 ## Configuration
 
-The application now stores all configuration in an internal SQLite database (`wakeonpi.db`). The previous `settings.json` file is migrated on first start. Users configure the system through the web UI.
+The application now stores all configuration in an internal SQLite database (`wakeonpi.db`). Default configuration values are loaded from `wakeonpi/settings_template.json` and ingested into the SQLite database on first launch. Users configure the system through the web UI.
 
-On first launch, **no admin account exists**. Navigating to any URL (including `/`, `/login`, or `/settings`) automatically redirects to the **Setup Wizard** at `/setup`, where you create an admin username and password. Until this step is completed, the login page and all protected endpoints remain inaccessible. These credentials are stored as salted PBKDF2 hashes in the database.
+On first launch, **no admin account exists**. Navigating to any URL (including `/login` or `/settings`) automatically redirects to the **Setup Wizard** at `/setup`, where you create an admin username and password. Until this step is completed, the login page and all protected endpoints remain inaccessible. These credentials are stored as salted PBKDF2 hashes in the database.
 
 Key configuration points:
 
@@ -68,8 +67,6 @@ Key configuration points:
 - **Stream Authentication**: Stream endpoints (`/stream`, `/snapshot`) continue to support Basic Auth with a generated random password, visible and resettable via the Settings UI.
 - **Home Assistant Integration**: The update mechanism is exposed via Home Assistant using the native update platform. Updates can be triggered from Home Assistant or the Web UI.
 - **Other Settings**: Remaining runtime options (motion thresholds, display control, MQTT broker, etc.) are still accessible via the Settings page and are persisted in the SQLite database.
-
-The migration from `settings.json` to SQLite is automatic: if `settings.json` is present, its contents are imported into the database on first launch, after which the JSON file is ignored.
 
 ## Notes
 

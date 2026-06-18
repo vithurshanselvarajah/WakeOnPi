@@ -52,11 +52,6 @@ if WEBSOCKET_ENABLED:
     sock = Sock(app)
 
 
-@app.route("/")
-def index():
-    if not config.SETUP_COMPLETE:
-        return redirect(url_for("setup"))
-    return redirect(url_for("settings"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -855,6 +850,10 @@ if WEBSOCKET_ENABLED:
                             ):
                                 continue
                             try:
+                                if key == "HTTP_PASSWORD":
+                                    if val and val != SENSITIVE_PLACEHOLDER:
+                                        updates["HTTP_PASSWORD_HASH"] = db.hash_password(val)
+                                    continue
                                 updates[key] = (
                                     _parse_setting(key, val)
                                     if val

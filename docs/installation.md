@@ -81,9 +81,9 @@ The Web server starts on `http://0.0.0.0:5000`.
 
 1. Open your browser and navigate to:
    ```text
-   http://<your-pi-ip>:5000/
+   http://<your-pi-ip>:5000/setup
    ```
-2. On first connection, you will be automatically redirected to the **Setup Wizard** (`/setup`).
+2. On first connection, you will access the **Setup Wizard** (`/setup`).
 3. Create your administrative username and password (you will be asked to confirm the password).
 4. After submitting, you are automatically logged in and taken to the Settings Dashboard.
 5. Configure your system:

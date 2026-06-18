@@ -6,9 +6,9 @@ WakeOnPi stores all system configuration and administrative credentials in an in
 
 ## Initial Setup Flow
 
-On first launch, WakeOnPi detects that no administrator account exists. **Every URL** — including `/`, `/login`, and `/settings` — automatically redirects to the **Setup Wizard** at `/setup`. The login page is inaccessible until setup is completed.
+On first launch, WakeOnPi detects that no administrator account exists. **Every URL** — including `/login` and `/settings` — automatically redirects to the **Setup Wizard** at `/setup`. The login page is inaccessible until setup is completed.
 
-1. **Navigate to any URL**: Open `http://<your-pi-ip>:5000/` in a browser. You will be redirected to the Setup Wizard.
+1. **Navigate to Setup Page**: Open `http://<your-pi-ip>:5000/setup` or `http://<your-pi-ip>:5000/settings` in a browser. You will be on (or redirected to) the Setup Wizard.
 2. **Create Administrator Account**: Enter your desired admin username and a secure password (with confirmation).
 3. **Persistence**: These credentials are saved as salted PBKDF2 hashes in the database.
 4. **Automatic Login**: After completing setup, you are automatically logged in and redirected to the Settings Dashboard.

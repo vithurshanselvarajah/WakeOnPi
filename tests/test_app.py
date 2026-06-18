@@ -90,6 +90,10 @@ class TestAppIntegration(unittest.TestCase):
         self.assertIn("/settings", resp.headers["Location"])
         mock_reset.assert_called_once()
 
+    def test_root_returns_404(self):
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 404)
+
 
 if __name__ == '__main__':
     unittest.main()

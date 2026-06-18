@@ -5,46 +5,27 @@ from pathlib import Path
 from . import db
 
 log = logging.getLogger("Config")
-SETTINGS_FILE = Path(__file__).parent / "settings.json"
+TEMPLATE_FILE = Path(__file__).parent / "settings_template.json"
 
-DEFAULTS = {
-    "MOTION_THRESHOLD": 1500,
-    "INACTIVITY_TIMEOUT": 60,
-    "CHECK_INTERVAL": 1.0,
-    "MQTT_HOST": "localhost",
-    "MQTT_PORT": 1883,
-    "MQTT_TOPIC_PREFIX": "wakeonpi",
-    "MQTT_USERNAME": None,
-    "MQTT_PASSWORD": None,
-    "HASS_DASHBOARD_URL": "https://github.com/vithurshanselvarajah/WakeOnPi",
-    "HTTP_USERNAME": "wakeonpi",
-    "HTTP_PASSWORD_HASH": None,
-    "BACKLIGHT_PATH": "/sys/class/backlight/panel_backlight@0/bl_power",
-    "BRIGHTNESS_PATH": "/sys/class/backlight/panel_backlight@0/brightness",
-    "BRIGHTNESS_MAX_PATH": "/sys/class/backlight/panel_backlight@0/max_brightness",
-    "RECORDINGS_ROOT": str(Path(__file__).parent / "recordings"),
-    "STREAM_RESOLUTION": "854x480",
-    "STREAM_FPS": 10,
-    "STREAM_QUALITY": 75,
-    "OVERLAY_ENABLED": True,
-    "OVERLAY_SHOW_TIME": True,
-    "OVERLAY_SHOW_STATS": False,
-    "OVERLAY_POSITION": "top-right",
-    "SERVICE_PORT": 5000,
-    "DEBUG_MODE": False,
-    "CAMERA_ENABLED": True,
-    "RECORDING_ENABLED": True,
-    "RECORD_ON_MOTION": False,
-    "RECORD_POST_MOTION_TIMEOUT": 10,
-    "STORAGE_MAX_PERCENT": 90,
-    "STORAGE_FULL_ACTION": "pause",
-    "SCREEN_CONTROL_MODE": "auto",
-    "STREAM_USERNAME": "stream",
-    "STREAM_PASSWORD": None,
-    "SECRET_KEY": None,
-    "UPDATE_CHANNEL": "release",
-    "SETUP_COMPLETE": False,
-}
+
+def _load_defaults():
+    try:
+        with TEMPLATE_FILE.open("r", encoding="utf-8") as f:
+            defaults = json.load(f)
+    except Exception:
+        log.exception("Failed to load settings template settings_template.json")
+        defaults = {}
+
+    # Resolve relative paths (like RECORDINGS_ROOT)
+    if "RECORDINGS_ROOT" in defaults and defaults["RECORDINGS_ROOT"]:
+        p = Path(defaults["RECORDINGS_ROOT"])
+        if not p.is_absolute():
+            defaults["RECORDINGS_ROOT"] = str(Path(__file__).parent / p)
+
+    return defaults
+
+
+DEFAULTS = _load_defaults()
 
 
 def _cast_value(key, value):
@@ -69,33 +50,15 @@ def _cast_value(key, value):
 
 
 def _load():
-    legacy_data = {}
-    if SETTINGS_FILE.exists():
-        log.info("Legacy settings.json found. Migrating to SQLite database...")
-        try:
-            with SETTINGS_FILE.open("r", encoding="utf-8") as f:
-                legacy_data = json.load(f)
-            old_password = legacy_data.get("HTTP_PASSWORD")
-            if old_password and old_password != "password123":
-                legacy_data["HTTP_PASSWORD_HASH"] = db.hash_password(old_password)
-                legacy_data["SETUP_COMPLETE"] = True
-            elif old_password == "password123":
-                legacy_data["SETUP_COMPLETE"] = False
-        except Exception:
-            log.exception("Failed to parse legacy settings.json")
-
     data = {}
     db_settings = db.get_all_settings()
 
     for k, v in DEFAULTS.items():
         if k in db_settings:
             data[k] = _cast_value(k, db_settings[k])
-        elif k in legacy_data:
-            data[k] = legacy_data[k]
-            db.set_setting(k, str(legacy_data[k]))
         else:
             data[k] = v
-            db.set_setting(k, str(v))
+            db.set_setting(k, str(v) if v is not None else None)
 
     if not data.get("STREAM_PASSWORD"):
         data["STREAM_PASSWORD"] = secrets.token_urlsafe(16)
@@ -103,13 +66,6 @@ def _load():
     if not data.get("SECRET_KEY"):
         data["SECRET_KEY"] = secrets.token_hex(32)
         db.set_setting("SECRET_KEY", data["SECRET_KEY"])
-
-    if SETTINGS_FILE.exists():
-        try:
-            SETTINGS_FILE.unlink()
-            log.info("Migration successful. Legacy settings.json removed.")
-        except Exception:
-            log.exception("Failed to delete legacy settings.json file")
 
     return data
 
