@@ -1,5 +1,6 @@
 import time
 import logging
+import threading
 from picamera2 import Picamera2
 from libcamera import Transform
 from . import state, config
@@ -7,6 +8,10 @@ from . import state, config
 log = logging.getLogger("Camera")
 
 picam2 = Picamera2()
+
+# This lock protects ALL picam2 operations: mode switches, capture_array calls,
+# and reconfigure calls. Any code touching the camera must hold this lock.
+camera_lock = threading.Lock()
 
 
 def _get_stream_resolution():
@@ -59,21 +64,34 @@ picam2.start()
 
 def switch_to_full_mode():
     global video_config_full
-    with state.main_stream_lock:
+    with camera_lock:
         if not state.main_stream_active:
             state.ignore_motion_until = time.time() + 2
+            state.motion_prev_frame_stale = True
             video_config_full = create_full_config()
             picam2.switch_mode(video_config_full)
             state.main_stream_active = True
 
 
 def switch_to_lores_mode_if_needed():
-    with state.main_stream_lock:
+    with camera_lock:
         if state.main_stream_active and state.clients_connected == 0:
             state.ignore_motion_until = time.time() + 2
+            state.motion_prev_frame_stale = True
             picam2.switch_mode(video_config_lores)
-
             state.main_stream_active = False
+
+
+def capture_lores():
+    """Thread-safe capture of a lores frame for motion detection."""
+    with camera_lock:
+        return picam2.capture_array("lores")
+
+
+def capture_main():
+    """Thread-safe capture of a main (full-res) frame for streaming/recording."""
+    with camera_lock:
+        return picam2.capture_array("main")
 
 
 def get_stream_settings():
@@ -88,7 +106,9 @@ def reconfigure():
     global video_config_lores, video_config_full
     video_config_lores = create_lores_config()
     video_config_full = create_full_config()
-    if state.main_stream_active:
-        picam2.switch_mode(video_config_full)
-    else:
-        picam2.switch_mode(video_config_lores)
+    with camera_lock:
+        state.motion_prev_frame_stale = True
+        if state.main_stream_active:
+            picam2.switch_mode(video_config_full)
+        else:
+            picam2.switch_mode(video_config_lores)

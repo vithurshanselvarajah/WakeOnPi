@@ -5,6 +5,7 @@ import cv2
 import logging
 
 from . import camera, config, mqtt, state
+from .camera import capture_main
 
 log = logging.getLogger("Recorder")
 
@@ -32,8 +33,7 @@ class Recorder:
             camera.switch_to_full_mode()
             time.sleep(0.5)
 
-            picam2 = camera.picam2
-            frame = picam2.capture_array("main")
+            frame = capture_main()
             h, w = frame.shape[:2]
 
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -44,7 +44,7 @@ class Recorder:
                 return
 
             while not self._stop.is_set():
-                frame = picam2.capture_array("main")
+                frame = capture_main()
 
                 try:
                     bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

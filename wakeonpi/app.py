@@ -24,7 +24,7 @@ from .updater import trigger_update
 
 from . import state, mqtt, browser, recorder, system, overlay
 from .camera import (
-    picam2,
+    capture_main,
     switch_to_full_mode,
     switch_to_lores_mode_if_needed,
     get_stream_settings,
@@ -508,7 +508,7 @@ def video_feed():
                 stream_settings = get_stream_settings()
                 res = stream_settings["resolution"]
                 quality = stream_settings["quality"]
-                frame = picam2.capture_array("main")
+                frame = capture_main()
                 frame = cv2.resize(frame, res)
                 frame = overlay.draw_overlay(frame)
                 ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
@@ -569,7 +569,7 @@ def snapshot():
     try:
         switch_to_full_mode()
         time.sleep(0.1)
-        frame = picam2.capture_array("main")
+        frame = capture_main()
         stream_settings = get_stream_settings()
         frame = cv2.resize(frame, stream_settings["resolution"])
         frame = overlay.draw_overlay(frame)

@@ -4,7 +4,7 @@ import cv2
 import logging
 
 from . import state, config, mqtt, browser
-from .camera import picam2
+from .camera import capture_lores
 from .display import set_display
 
 log = logging.getLogger("Motion")
@@ -106,10 +106,17 @@ def motion_detection_loop():
     _apply_screen_control_mode()
 
     while True:
+        # If the camera mode was switched (stream started/stopped), discard
+        # the stale prev_frame so we rebuild the baseline from scratch.
+        if state.motion_prev_frame_stale:
+            prev_frame = None
+            state.motion_prev_frame_stale = False
+
         try:
-            lores_frame = picam2.capture_array("lores")
+            lores_frame = capture_lores()
         except Exception:
             log.exception("Failed to capture lores frame")
+            prev_frame = None  # Ensure clean baseline after recovery
             time.sleep(config.CHECK_INTERVAL)
             continue
 
@@ -146,6 +153,7 @@ def motion_detection_loop():
             prev_frame = gray
         except Exception:
             log.exception("Error during motion detection")
+            prev_frame = None  # Don't carry stale data after errors
         time.sleep(config.CHECK_INTERVAL)
 
 

@@ -18,6 +18,7 @@ main_stream_active = False
 main_stream_lock = threading.Lock()
 display_on = True
 ignore_motion_until = 0
+motion_prev_frame_stale = False
 manual_display_override = False
 stream_url = None
 browser_url = None
