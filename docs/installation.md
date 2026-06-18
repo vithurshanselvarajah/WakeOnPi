@@ -81,15 +81,18 @@ The Web server starts on `http://0.0.0.0:5000`.
 
 1. Open your browser and navigate to:
    ```text
-   http://<your-pi-ip>:5000/settings
+   http://<your-pi-ip>:5000/
    ```
-2. Because the database is unconfigured, you will be redirected to the **Setup Wizard** (`/setup`).
-3. Set your administrative username and password.
-4. Log in at `/login` to access the Settings Dashboard where you can configure:
+2. On first connection, you will be automatically redirected to the **Setup Wizard** (`/setup`).
+3. Create your administrative username and password (you will be asked to confirm the password).
+4. After submitting, you are automatically logged in and taken to the Settings Dashboard.
+5. Configure your system:
    - **Backlight Paths** for screen power control.
    - **MQTT Connection** settings.
    - **Motion Detection** threshold levels.
    - **Video Recording** folders.
+
+> **Note**: Until you complete the setup wizard, all URLs (including `/login` and `/settings`) redirect to `/setup`. The login page only becomes available after an admin account has been created.
 
 ---
 

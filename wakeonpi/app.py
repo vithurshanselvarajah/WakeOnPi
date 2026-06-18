@@ -52,8 +52,17 @@ if WEBSOCKET_ENABLED:
     sock = Sock(app)
 
 
+@app.route("/")
+def index():
+    if not config.SETUP_COMPLETE:
+        return redirect(url_for("setup"))
+    return redirect(url_for("settings"))
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if not config.SETUP_COMPLETE:
+        return redirect(url_for("setup"))
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
