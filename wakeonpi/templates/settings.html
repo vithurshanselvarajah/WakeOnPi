@@ -401,7 +401,7 @@
       <div class="card-body">
         <div class="form-group">
           <label>Screen Control Mode</label>
-          <select id="screen-mode" onchange="updateSetting('SCREEN_CONTROL_MODE', this.value)">
+          <select id="screen-mode" onchange="localSelectChange('SCREEN_CONTROL_MODE', this.value)">
             <option value="auto">Auto (Motion-based)</option>
             <option value="always_on">Always On</option>
             <option value="always_off">Always Off</option>
@@ -418,6 +418,9 @@
             <input type="range" id="brightness-slider" min="5" max="100" step="5" value="100" onchange="setBrightness(this.value)" oninput="document.getElementById('brightness-value').textContent=this.value">
             <span>🔆</span>
           </div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveDisplayControl()">Save Display Settings</button>
         </div>
       </div>
     </div>
@@ -461,24 +464,27 @@
       <div class="card-body">
         <div class="inline-toggle">
           <label>Enable Overlay</label>
-          <div class="toggle-btn" id="overlay-toggle" onclick="toggleSetting('OVERLAY_ENABLED')"></div>
+          <div class="toggle-btn" id="overlay-toggle" onclick="this.classList.toggle('active')"></div>
         </div>
         <div class="inline-toggle">
           <label>Show Time</label>
-          <div class="toggle-btn" id="overlay-time-toggle" onclick="toggleSetting('OVERLAY_SHOW_TIME')"></div>
+          <div class="toggle-btn" id="overlay-time-toggle" onclick="this.classList.toggle('active')"></div>
         </div>
         <div class="inline-toggle">
           <label>Show System Stats</label>
-          <div class="toggle-btn" id="overlay-stats-toggle" onclick="toggleSetting('OVERLAY_SHOW_STATS')"></div>
+          <div class="toggle-btn" id="overlay-stats-toggle" onclick="this.classList.toggle('active')"></div>
         </div>
         <div class="form-group" style="margin-top:12px">
           <label>Position</label>
-          <select id="overlay-position" onchange="updateSetting('OVERLAY_POSITION', this.value)">
+          <select id="overlay-position">
             <option value="top-left">Top Left</option>
             <option value="top-right">Top Right</option>
             <option value="bottom-left">Bottom Left</option>
             <option value="bottom-right">Bottom Right</option>
           </select>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveOverlaySettings()">Save Overlay Settings</button>
         </div>
       </div>
     </div>
@@ -491,12 +497,12 @@
       <div class="card-body">
         <div class="inline-toggle">
           <label>Enable Camera</label>
-          <div class="toggle-btn" id="camera-toggle" onclick="toggleSetting('CAMERA_ENABLED')"></div>
+          <div class="toggle-btn" id="camera-toggle" onclick="localToggleSetting('CAMERA_ENABLED', 'camera-toggle')"></div>
         </div>
         <div id="stream-settings-content">
           <div class="form-group" style="margin-top:12px">
             <label>Resolution</label>
-            <select id="stream-resolution" onchange="updateSetting('STREAM_RESOLUTION', this.value)">
+            <select id="stream-resolution">
               <option value="640x360">640x360 (Low)</option>
               <option value="854x480">854x480 (SD)</option>
               <option value="1280x720">1280x720 (HD)</option>
@@ -506,7 +512,7 @@
           <div class="row">
             <div class="form-group">
               <label>FPS</label>
-              <select id="stream-fps" onchange="updateSetting('STREAM_FPS', parseInt(this.value))">
+              <select id="stream-fps">
                 <option value="5">5 FPS</option>
                 <option value="10">10 FPS</option>
                 <option value="15">15 FPS</option>
@@ -516,7 +522,7 @@
             </div>
             <div class="form-group">
               <label>Quality</label>
-              <select id="stream-quality" onchange="updateSetting('STREAM_QUALITY', parseInt(this.value))">
+              <select id="stream-quality">
                 <option value="50">50% (Low)</option>
                 <option value="65">65% (Medium)</option>
                 <option value="75">75% (Good)</option>
@@ -525,6 +531,9 @@
               </select>
             </div>
           </div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveStreamSettings()">Save Stream Settings</button>
         </div>
       </div>
     </div>
@@ -537,27 +546,30 @@
       <div class="card-body">
         <div class="inline-toggle">
           <label>Enable Recording</label>
-          <div class="toggle-btn" id="recording-toggle" onclick="toggleSetting('RECORDING_ENABLED')"></div>
+          <div class="toggle-btn" id="recording-toggle" onclick="localToggleSetting('RECORDING_ENABLED', 'recording-toggle')"></div>
         </div>
         <div class="inline-toggle" id="record-motion-section">
           <label>Record on Motion</label>
-          <div class="toggle-btn" id="record-motion-toggle" onclick="toggleSetting('RECORD_ON_MOTION')"></div>
+          <div class="toggle-btn" id="record-motion-toggle" onclick="localToggleSetting('RECORD_ON_MOTION', 'record-motion-toggle')"></div>
         </div>
         <div class="form-group" id="post-motion-timeout-section" style="margin-top:12px">
           <label>Post-Motion Recording (seconds)</label>
-          <input type="number" id="post-motion-timeout" min="1" max="300" step="1" onchange="updateSetting('RECORD_POST_MOTION_TIMEOUT', parseInt(this.value))">
+          <input type="number" id="post-motion-timeout" min="1" max="300" step="1">
           <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Recording continues for this duration after motion stops</p>
         </div>
         <div class="form-group" style="margin-top:16px">
           <label>Max Storage Usage (%)</label>
-          <input type="number" id="storage-max" min="50" max="99" step="1" onchange="updateSetting('STORAGE_MAX_PERCENT', parseInt(this.value))">
+          <input type="number" id="storage-max" min="50" max="99" step="1">
         </div>
         <div class="form-group">
           <label>When Storage Full</label>
-          <select id="storage-action" onchange="updateSetting('STORAGE_FULL_ACTION', this.value)">
+          <select id="storage-action">
             <option value="pause">Pause Recording</option>
             <option value="overwrite">Delete Oldest Recording</option>
           </select>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveRecordingSettings()">Save Recording Settings</button>
         </div>
       </div>
     </div>
@@ -570,17 +582,20 @@
       <div class="card-body">
         <div class="form-group">
           <label>Motion Threshold</label>
-          <input type="number" id="motion-threshold" onchange="updateSetting('MOTION_THRESHOLD', parseInt(this.value))">
+          <input type="number" id="motion-threshold">
         </div>
         <div class="row">
           <div class="form-group">
             <label>Inactivity Timeout (s)</label>
-            <input type="number" id="inactivity-timeout" step="1" onchange="updateSetting('INACTIVITY_TIMEOUT', parseFloat(this.value))">
+            <input type="number" id="inactivity-timeout" step="1">
           </div>
           <div class="form-group">
             <label>Check Interval (s)</label>
-            <input type="number" id="check-interval" step="0.1" onchange="updateSetting('CHECK_INTERVAL', parseFloat(this.value))">
+            <input type="number" id="check-interval" step="0.1">
           </div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveMotionSettings()">Save Motion Settings</button>
         </div>
       </div>
     </div>
@@ -594,26 +609,29 @@
         <div class="row">
           <div class="form-group">
             <label>Host</label>
-            <input type="text" id="mqtt-host" onchange="updateSetting('MQTT_HOST', this.value)">
+            <input type="text" id="mqtt-host">
           </div>
           <div class="form-group">
             <label>Port</label>
-            <input type="number" id="mqtt-port" onchange="updateSetting('MQTT_PORT', parseInt(this.value))">
+            <input type="number" id="mqtt-port">
           </div>
         </div>
         <div class="form-group">
           <label>Topic Prefix</label>
-          <input type="text" id="mqtt-prefix" onchange="updateSetting('MQTT_TOPIC_PREFIX', this.value)">
+          <input type="text" id="mqtt-prefix">
         </div>
         <div class="row">
           <div class="form-group">
             <label>Username</label>
-            <input type="text" id="mqtt-username" onchange="updateSetting('MQTT_USERNAME', this.value)">
+            <input type="text" id="mqtt-username">
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input type="password" id="mqtt-password" onchange="updateSetting('MQTT_PASSWORD', this.value)">
+            <input type="password" id="mqtt-password">
           </div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveMqttSettings()">Save MQTT Settings</button>
         </div>
       </div>
     </div>
@@ -632,11 +650,14 @@
         </div>
         <div class="form-group">
           <label>Dashboard URL</label>
-          <input type="text" id="dashboard-url" onchange="updateSetting('HASS_DASHBOARD_URL', this.value)">
+          <input type="text" id="dashboard-url">
         </div>
         <div class="form-group">
           <label>Current URL</label>
           <input type="text" id="browser-url" readonly style="background:var(--card)">
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveBrowserSettings()">Save Browser Settings</button>
         </div>
       </div>
     </div>
@@ -650,14 +671,17 @@
         <div class="row">
           <div class="form-group">
             <label>HTTP Username</label>
-            <input type="text" id="http-username" onchange="updateSetting('HTTP_USERNAME', this.value)">
+            <input type="text" id="http-username">
           </div>
           <div class="form-group">
             <label>HTTP Password</label>
-            <input type="password" id="http-password" onchange="updateSetting('HTTP_PASSWORD', this.value)">
+            <input type="password" id="http-password">
           </div>
         </div>
         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">⚠️ Changing credentials requires re-login</p>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="saveSecuritySettings()">Save Security Settings</button>
+        </div>
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
           <h3 style="font-size:0.95rem;margin-bottom:12px;font-weight:600">📺 Stream Authentication</h3>
           <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Use these credentials to view the stream/snapshots in external apps (e.g. Home Assistant):</p>
@@ -714,15 +738,18 @@
       <div class="card-body">
         <div class="form-group">
           <label>Backlight Path</label>
-          <input type="text" id="backlight-path" onchange="updateSetting('BACKLIGHT_PATH', this.value)">
+          <input type="text" id="backlight-path">
         </div>
         <div class="form-group">
           <label>Brightness Path</label>
-          <input type="text" id="brightness-path" onchange="updateSetting('BRIGHTNESS_PATH', this.value)">
+          <input type="text" id="brightness-path">
         </div>
         <div class="form-group">
           <label>Recordings Root</label>
-          <input type="text" id="recordings-root" onchange="updateSetting('RECORDINGS_ROOT', this.value)">
+          <input type="text" id="recordings-root">
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" onclick="savePathsSettings()">Save Paths Settings</button>
         </div>
       </div>
     </div>
@@ -735,12 +762,15 @@
       <div class="card-body">
         <div class="form-group">
           <label>Service Port</label>
-          <input type="number" id="service-port" min="1" max="65535" onchange="updateSetting('SERVICE_PORT', parseInt(this.value))">
+          <input type="number" id="service-port" min="1" max="65535">
           <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">⚠️ Requires restart to take effect</p>
         </div>
         <div class="inline-toggle">
           <label>Debug Mode</label>
-          <div class="toggle-btn" id="debug-toggle" onclick="toggleSetting('DEBUG_MODE')"></div>
+          <div class="toggle-btn" id="debug-toggle" onclick="this.classList.toggle('active')"></div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); margin-bottom: 16px;">
+          <button class="btn btn-primary btn-sm" onclick="saveSystemSettings()">Save System Settings</button>
         </div>
         <div class="form-group" style="margin-top:16px">
           <button class="btn btn-secondary" onclick="openLogs()">📋 View Logs</button>
@@ -1059,19 +1089,114 @@
       showToast('Restarting services...');
     }
 
-    function updateSetting(key, value) {
-      send('update_settings', { settings: { [key]: value } });
-      showToast('Setting updated');
-      // Update local settings for feature visibility
+    function localToggleSetting(key, elementId) {
+      const el = document.getElementById(elementId);
+      el.classList.toggle('active');
+      const active = el.classList.contains('active');
+      settings[key] = active;
+      updateFeatureVisibility(settings);
+    }
+
+    function localSelectChange(key, value) {
       settings[key] = value;
       updateFeatureVisibility(settings);
     }
 
-    function toggleSetting(key) {
-      const current = settings[key];
-      const newValue = !current;
-      settings[key] = newValue;
-      updateSetting(key, newValue);
+    function getToggleState(id) {
+      return document.getElementById(id).classList.contains('active');
+    }
+
+    function saveSettingsGroup(updates) {
+      send('update_settings', { settings: updates });
+      showToast('Settings saved successfully');
+      // Update local settings for feature visibility
+      Object.assign(settings, updates);
+      updateFeatureVisibility(settings);
+    }
+
+    function saveDisplayControl() {
+      saveSettingsGroup({
+        SCREEN_CONTROL_MODE: document.getElementById('screen-mode').value
+      });
+    }
+
+    function saveOverlaySettings() {
+      saveSettingsGroup({
+        OVERLAY_ENABLED: getToggleState('overlay-toggle'),
+        OVERLAY_SHOW_TIME: getToggleState('overlay-time-toggle'),
+        OVERLAY_SHOW_STATS: getToggleState('overlay-stats-toggle'),
+        OVERLAY_POSITION: document.getElementById('overlay-position').value
+      });
+    }
+
+    function saveStreamSettings() {
+      saveSettingsGroup({
+        CAMERA_ENABLED: getToggleState('camera-toggle'),
+        STREAM_RESOLUTION: document.getElementById('stream-resolution').value,
+        STREAM_FPS: parseInt(document.getElementById('stream-fps').value),
+        STREAM_QUALITY: parseInt(document.getElementById('stream-quality').value)
+      });
+    }
+
+    function saveRecordingSettings() {
+      saveSettingsGroup({
+        RECORDING_ENABLED: getToggleState('recording-toggle'),
+        RECORD_ON_MOTION: getToggleState('record-motion-toggle'),
+        RECORD_POST_MOTION_TIMEOUT: parseInt(document.getElementById('post-motion-timeout').value),
+        STORAGE_MAX_PERCENT: parseInt(document.getElementById('storage-max').value),
+        STORAGE_FULL_ACTION: document.getElementById('storage-action').value
+      });
+    }
+
+    function saveMotionSettings() {
+      saveSettingsGroup({
+        MOTION_THRESHOLD: parseInt(document.getElementById('motion-threshold').value),
+        INACTIVITY_TIMEOUT: parseFloat(document.getElementById('inactivity-timeout').value),
+        CHECK_INTERVAL: parseFloat(document.getElementById('check-interval').value)
+      });
+    }
+
+    function saveMqttSettings() {
+      saveSettingsGroup({
+        MQTT_HOST: document.getElementById('mqtt-host').value,
+        MQTT_PORT: parseInt(document.getElementById('mqtt-port').value),
+        MQTT_TOPIC_PREFIX: document.getElementById('mqtt-prefix').value,
+        MQTT_USERNAME: document.getElementById('mqtt-username').value || null,
+        MQTT_PASSWORD: document.getElementById('mqtt-password').value || null
+      });
+    }
+
+    function saveBrowserSettings() {
+      saveSettingsGroup({
+        HASS_DASHBOARD_URL: document.getElementById('dashboard-url').value
+      });
+    }
+
+    function saveSecuritySettings() {
+      const username = document.getElementById('http-username').value;
+      const password = document.getElementById('http-password').value;
+      const updates = {
+        HTTP_USERNAME: username
+      };
+      if (password && password !== SENSITIVE_PLACEHOLDER) {
+        updates.HTTP_PASSWORD = password;
+      }
+      saveSettingsGroup(updates);
+    }
+
+    function savePathsSettings() {
+      saveSettingsGroup({
+        BACKLIGHT_PATH: document.getElementById('backlight-path').value,
+        BRIGHTNESS_PATH: document.getElementById('brightness-path').value,
+        RECORDINGS_ROOT: document.getElementById('recordings-root').value
+      });
+    }
+
+    function saveSystemSettings() {
+      saveSettingsGroup({
+        SERVICE_PORT: parseInt(document.getElementById('service-port').value),
+        DEBUG_MODE: getToggleState('debug-toggle')
+      });
     }
 
     function refreshPreview() {
