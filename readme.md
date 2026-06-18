@@ -17,10 +17,12 @@ It is built for always-on Pi setups where you want the display and stream to rea
 
 ## Quick start
 
-1. Install dependencies:
+1. Install dependencies via `apt` (and the remaining `flask-sock` package via `pip`):
 
 ```bash
-python3 -m pip install -r requirements.txt
+sudo apt update
+sudo apt install -y python3-flask python3-paho-mqtt python3-opencv python3-picamera2 python3-pip
+sudo pip3 install flask-sock --break-system-packages
 ```
 
 2. Run the app:
@@ -75,7 +77,7 @@ The migration from `settings.json` to SQLite is automatic: if `settings.json` is
 - Camera and backlight access may require elevated permissions depending on your setup.
 - WebUI endpoints use session-based cookie authentication using a session secret key.
 - Stream endpoints (`/stream` and `/snapshot`) support Basic Auth using the username `stream` and a randomly generated password, visible and resettable via the WebUI.
-- Updates pull the latest code from GitHub (`git pull`), install new dependencies (`pip install`), and trigger an in-place Python process reload without requiring root/sudo privileges.
+- Updates download and extract the latest release from GitHub, then trigger an in-place Python process reload without requiring root/sudo privileges.
 - MQTT is optional; if unavailable, the app still runs without it.
 
 ## Development

@@ -2,32 +2,25 @@
 
 ## Prerequisites
 
-- Raspberry Pi (3, 4, or 5 recommended) running Raspberry Pi OS or similar Linux distribution.
-- Python 3.14 or later.
+- Raspberry Pi (3, 4, or 5 recommended) running Raspberry Pi OS.
+- Python 3.11 or later.
 - Camera module connected and enabled.
-- pip (Python package manager).
 
 ---
 
-## System Dependencies
+## System and Python Dependencies
 
-Before installing Python dependencies, install the required system packages:
+Install the required system and Python packages via `apt`:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-    python3-dev \
-    python3-pip \
-    libatlas-base-dev \
-    libjasper-dev \
-    libtiff5 \
-    libjasper1 \
-    libharfbuzz0b \
-    libwebp6 \
-    libtk8.6 \
-    libopenjp2-7 \
-    libopenjp2-7-dev \
-    libopenblas-dev
+    git \
+    python3-flask \
+    python3-paho-mqtt \
+    python3-opencv \
+    python3-picamera2 \
+    python3-pip
 ```
 
 ---
@@ -52,15 +45,22 @@ Navigate to `Interface Options` → `Camera` and select `Yes` to enable it, then
    cd WakeOnPi
    ```
 
-2. **Create a Virtual Environment**:
+2. **Install Remaining Python Dependencies**:
+
+   You can choose to install within a virtual environment or system-wide:
+
+   ### Option A: Using a Virtual Environment (Recommended)
+   Create a virtual environment that can access the `apt`-installed system packages:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python3 -m venv venv --system-site-packages
+   source venv/bin/activate
+   pip install flask-sock
    ```
 
-3. **Install Python Dependencies**:
+   ### Option B: System-wide Installation (without Virtual Environment)
+   On modern Raspberry Pi OS releases (Bookworm+), installing globally via `pip` requires the `--break-system-packages` flag for packages not in apt:
    ```bash
-   pip install -r requirements.txt
+   sudo pip3 install flask-sock --break-system-packages
    ```
 
 ---
@@ -107,20 +107,24 @@ To run WakeOnPi automatically on startup as a background service:
 
 2. Paste the following configuration:
    ```ini
-   [Unit]
-   Description=WakeOnPi - Raspberry Pi Camera & Screen Service
-   After=network.target
+[Unit]
+Description=WakeOnPi - motion-aware camera stream and display controller
+After=network.target
 
-   [Service]
-   Type=simple
-   User=pi
-   WorkingDirectory=/home/pi/WakeOnPi
-   ExecStart=/home/pi/WakeOnPi/venv/bin/python3 run.py
-   Restart=on-failure
-   RestartSec=10
+[Service]
+WorkingDirectory=/home/<username>/WakeOnPi
 
-   [Install]
-   WantedBy=multi-user.target
+ExecStart=/home/<username>/WakeOnPi/venv/bin/python /home/<username>/WakeOnPi/run.py
+
+Environment=DISPLAY=:0
+
+Restart=always
+RestartSec=5
+
+User=<username>
+
+[Install]
+WantedBy=multi-user.target
    ```
 
 3. Reload systemd, enable, and start the service:
