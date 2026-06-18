@@ -445,6 +445,13 @@ def settings():
     status["recordings_writable"] = rec_test["writable"] if rec_test else None
 
     return render_template(
+            "settings.html",
+            s=s,
+            pwd_display=pwd_display,
+            http_pwd_display=http_pwd_display,
+            status=status,
+            db_error=state.db_load_error,
+            json_settings=json.dumps(s)
         "settings.html",
         s=s,
         pwd_display=pwd_display,
