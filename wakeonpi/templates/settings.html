@@ -1106,10 +1106,24 @@
       return document.getElementById(id).classList.contains('active');
     }
 
-    function saveSettingsGroup(updates) {
-      send('update_settings', { settings: updates });
-      showToast('Settings saved successfully');
-      // Update local settings for feature visibility
+    async function saveSettingsGroup(updates) {
+      try {
+        const resp = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        const data = await resp.json();
+        if (data.success) {
+          showToast('Settings saved');
+        } else {
+          showToast('Failed to save: ' + (data.error || 'unknown error'));
+        }
+      } catch (e) {
+        showToast('Error saving settings');
+        console.error('Save error:', e);
+      }
+      // Update local state for immediate feature visibility
       Object.assign(settings, updates);
       updateFeatureVisibility(settings);
     }
