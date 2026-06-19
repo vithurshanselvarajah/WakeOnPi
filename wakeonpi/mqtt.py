@@ -248,8 +248,8 @@ def _reconnect_loop():
             threading.Thread(target=_client.loop_forever, daemon=True).start()
             _reconnect_delay = 5
             break
-        except Exception:
-            log.exception("MQTT reconnect failed")
+        except Exception as e:
+            log.error("MQTT reconnect failed: %s", e)
             _reconnect_delay = min(_reconnect_delay * 2, _max_reconnect_delay)
 
 
@@ -304,8 +304,8 @@ def start():
             log.info(f"Connecting to MQTT {host}:{port}")
             _client.connect(host, port)
             threading.Thread(target=_client.loop_forever, daemon=True).start()
-        except Exception:
-            log.exception("MQTT connect error")
+        except Exception as e:
+            log.error("MQTT connect error: %s", e)
             _connected = False
             _start_reconnect_thread()
 
