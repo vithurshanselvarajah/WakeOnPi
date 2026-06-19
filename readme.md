@@ -17,10 +17,12 @@ It is built for always-on Pi setups where you want the display and stream to rea
 
 ## Quick start
 
-1. Install dependencies:
+1. Install dependencies via `apt` (and the remaining `flask-sock` package via `pip`):
 
 ```bash
-python3 -m pip install -r requirements.txt
+sudo apt update
+sudo apt install -y python3-flask python3-paho-mqtt python3-opencv python3-picamera2 python3-pip
+sudo pip3 install flask-sock --break-system-packages
 ```
 
 2. Run the app:
@@ -38,7 +40,8 @@ http://<pi-ip>:5000/stream
 
 ## Main endpoints
 
-- `GET /login` / `/logout` - WebUI session management
+- `GET /setup` - First-time setup wizard (create admin account)
+- `GET /login` / `/logout` - WebUI session management (redirects to `/setup` if no account exists)
 - `GET /settings` - settings dashboard (session auth)
 - `GET /stream` - MJPEG stream (stream basic auth or session auth)
 - `GET /snapshot` - single JPEG frame (stream basic auth or session auth)
@@ -53,17 +56,17 @@ http://<pi-ip>:5000/stream
 
 ## Configuration
 
-The application now stores all configuration in an internal SQLite database (`wakeonpi.db`). The previous `settings.json` file is migrated on first start. Users configure the system through the web UI; on first launch the app redirects to a **Setup Wizard** where a username and password are created. These credentials are stored hashed in the database.
+The application now stores all configuration in an internal SQLite database (`wakeonpi.db`). Default configuration values are loaded from `wakeonpi/settings_template.json` and ingested into the SQLite database on first launch. Users configure the system through the web UI.
+
+On first launch, **no admin account exists**. Navigating to any URL (including `/login` or `/settings`) automatically redirects to the **Setup Wizard** at `/setup`, where you create an admin username and password. Until this step is completed, the login page and all protected endpoints remain inaccessible. These credentials are stored as salted PBKDF2 hashes in the database.
 
 Key configuration points:
 
 - **Database**: `wakeonpi/db.py` manages the SQLite file located at `wakeonpi/wakeonpi.db`. It contains tables for settings and user credentials.
-- **Setup Flow**: On first run, if no admin user exists, visiting any page redirects to `/setup`. The wizard asks for an admin username and password, which are saved securely (PBKDF2 hash). After setup, normal operation resumes.
+- **First-Connection Setup**: On first run, if no admin account exists, every page redirects to `/setup`. The wizard asks for an admin username and password, which are saved securely (PBKDF2 hash). After setup, normal login and operation resumes.
 - **Stream Authentication**: Stream endpoints (`/stream`, `/snapshot`) continue to support Basic Auth with a generated random password, visible and resettable via the Settings UI.
 - **Home Assistant Integration**: The update mechanism is exposed via Home Assistant using the native update platform. Updates can be triggered from Home Assistant or the Web UI.
 - **Other Settings**: Remaining runtime options (motion thresholds, display control, MQTT broker, etc.) are still accessible via the Settings page and are persisted in the SQLite database.
-
-The migration from `settings.json` to SQLite is automatic: if `settings.json` is present, its contents are imported into the database on first launch, after which the JSON file is ignored.
 
 ## Notes
 
@@ -71,7 +74,7 @@ The migration from `settings.json` to SQLite is automatic: if `settings.json` is
 - Camera and backlight access may require elevated permissions depending on your setup.
 - WebUI endpoints use session-based cookie authentication using a session secret key.
 - Stream endpoints (`/stream` and `/snapshot`) support Basic Auth using the username `stream` and a randomly generated password, visible and resettable via the WebUI.
-- Updates pull the latest code from GitHub (`git pull`), install new dependencies (`pip install`), and trigger an in-place Python process reload without requiring root/sudo privileges.
+- Updates download and extract the latest release from GitHub, then trigger an in-place Python process reload without requiring root/sudo privileges.
 - MQTT is optional; if unavailable, the app still runs without it.
 
 ## Development

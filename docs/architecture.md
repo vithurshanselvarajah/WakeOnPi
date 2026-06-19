@@ -230,7 +230,9 @@ Environment Variables → config.py → State Module → Services
 
 ## Security Architecture
 
-- **Authentication**: HTTP Basic Auth on all APIs
+- **First-Connection Setup**: On first launch, all routes redirect to `/setup` until an admin account is created
+- **Authentication**: Session-based cookie auth for WebUI; HTTP Basic Auth for stream endpoints
+- **Password Storage**: Salted PBKDF2 hashes (never stored in plaintext)
 - **HTTPS**: Support via reverse proxy (nginx/Caddy)
 - **MQTT**: Optional username/password and topic ACLs
 - **Isolation**: Runs with minimal required permissions

@@ -16,10 +16,10 @@ WakeOnPi is built for always-on Pi setups where you want the display and stream 
 
 ## Quick Start
 
-1. [Installation Guide](./installation.md) - Get WakeOnPi up and running
-2. [Configuration](./configuration.md) - Configure settings and MQTT
-3. [API Reference](./api.md) - Complete API endpoint documentation
-4. [Architecture](./architecture.md) - Understand how WakeOnPi works
+1. [Installation Guide](./installation) - Get WakeOnPi up and running
+2. [Configuration](./configuration) - Configure settings and MQTT
+3. [API Reference](./api) - Complete API endpoint documentation
+4. [Architecture](./architecture) - Understand how WakeOnPi works
 
 ## Key Features
 
@@ -40,11 +40,11 @@ Multiple endpoints provide live MJPEG streams and snapshots for remote monitorin
 
 ## Documentation Structure
 
-- **[Installation](./installation.md)** - Dependencies, setup instructions
-- **[Configuration](./configuration.md)** - Settings, MQTT setup, environment variables
-- **[API Reference](./api.md)** - Complete endpoint documentation
-- **[Architecture](./architecture.md)** - System design and component overview
-- **[Development](./development.md)** - Contribution guidelines and development setup
+- **[Installation](./installation)** - Dependencies, setup instructions
+- **[Configuration](./configuration)** - Settings, MQTT setup, environment variables
+- **[API Reference](./api)** - Complete endpoint documentation
+- **[Architecture](./architecture)** - System design and component overview
+- **[Development](./development)** - Contribution guidelines and development setup
 
 ## Main Endpoints
 
@@ -63,7 +63,7 @@ Multiple endpoints provide live MJPEG streams and snapshots for remote monitorin
 
 ## Support & Contributing
 
-For bug reports, feature requests, or contributions, please refer to the main repository. All code contributions should follow the guidelines in the [Development](./development.md) documentation.
+For bug reports, feature requests, or contributions, please refer to the main repository. All code contributions should follow the guidelines in the [Development](./development) documentation.
 
 ## License
 

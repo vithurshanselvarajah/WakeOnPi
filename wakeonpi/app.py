@@ -24,7 +24,7 @@ from .updater import trigger_update
 
 from . import state, mqtt, browser, recorder, system, overlay
 from .camera import (
-    picam2,
+    capture_main,
     switch_to_full_mode,
     switch_to_lores_mode_if_needed,
     get_stream_settings,
@@ -52,8 +52,12 @@ if WEBSOCKET_ENABLED:
     sock = Sock(app)
 
 
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if not config.SETUP_COMPLETE:
+        return redirect(url_for("setup"))
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -100,6 +104,8 @@ def setup():
         config.update_settings(
             HTTP_USERNAME=username, HTTP_PASSWORD_HASH=pwd_hash, SETUP_COMPLETE=True
         )
+        # Reload settings to ensure in-memory cache reflects database changes
+        config.load_settings()
         from flask import session
 
         session["logged_in"] = True
@@ -375,11 +381,12 @@ def settings():
 
         if updates:
             config.update_settings(**updates)
+            config.load_settings()
 
             try:
                 mqtt.restart()
             except Exception:
-                log.exception("Failed to restart MQTT after settings change")
+                log.exception("Failed to restart MQTT after settings update")
 
             if "RECORDINGS_ROOT" in updates:
                 rr = updates["RECORDINGS_ROOT"] or config.RECORDINGS_ROOT
@@ -444,6 +451,7 @@ def settings():
         http_pwd_display=http_pwd_display,
         status=status,
         db_error=state.db_load_error,
+        json_settings=json.dumps(s),
     )
 
 
@@ -499,7 +507,7 @@ def video_feed():
                 stream_settings = get_stream_settings()
                 res = stream_settings["resolution"]
                 quality = stream_settings["quality"]
-                frame = picam2.capture_array("main")
+                frame = capture_main()
                 frame = cv2.resize(frame, res)
                 frame = overlay.draw_overlay(frame)
                 ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
@@ -560,7 +568,7 @@ def snapshot():
     try:
         switch_to_full_mode()
         time.sleep(0.1)
-        frame = picam2.capture_array("main")
+        frame = capture_main()
         stream_settings = get_stream_settings()
         frame = cv2.resize(frame, stream_settings["resolution"])
         frame = overlay.draw_overlay(frame)
@@ -846,6 +854,10 @@ if WEBSOCKET_ENABLED:
                             ):
                                 continue
                             try:
+                                if key == "HTTP_PASSWORD":
+                                    if val and val != SENSITIVE_PLACEHOLDER:
+                                        updates["HTTP_PASSWORD_HASH"] = db.hash_password(val)
+                                    continue
                                 updates[key] = (
                                     _parse_setting(key, val)
                                     if val
