@@ -25,11 +25,12 @@ def _get_brightness_max_path():
 
 
 def set_display(on):
+    log.info("Display state changing to: %s", "ON" if on else "OFF")
     try:
         with open(_get_backlight_path(), "w") as f:
             f.write("0" if on else "1")
-    except Exception:
-        log.exception("Failed to set backlight")
+    except Exception as e:
+        log.error("Failed to set backlight: %s", e)
 
 
 def get_max_brightness():

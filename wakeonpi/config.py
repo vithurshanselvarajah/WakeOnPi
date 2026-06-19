@@ -124,9 +124,13 @@ def update_settings(**kwargs):
     global SERVICE_PORT, DEBUG_MODE
     global STREAM_USERNAME, STREAM_PASSWORD, SECRET_KEY, UPDATE_CHANNEL, SETUP_COMPLETE
 
+    SENSITIVE_KEYS = {"MQTT_PASSWORD", "HTTP_PASSWORD", "HTTP_PASSWORD_HASH", "STREAM_PASSWORD", "SECRET_KEY"}
+
     for k, v in kwargs.items():
         if k in _settings:
             _settings[k] = _cast_value(k, v)
+            display_val = "[redacted]" if k in SENSITIVE_KEYS else _settings[k]
+            log.info("Setting changed: %s = %s", k, display_val)
     _save(_settings)
 
     MOTION_THRESHOLD = _settings["MOTION_THRESHOLD"]
