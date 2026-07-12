@@ -381,12 +381,19 @@ def settings():
 
         if updates:
             config.update_settings(**updates)
-            config.load_settings()
 
             try:
                 mqtt.restart()
             except Exception:
                 log.exception("Failed to restart MQTT after settings update")
+
+            if "SCREEN_CONTROL_MODE" in updates:
+                from . import motion as motion_module
+                motion_module.apply_screen_mode()
+                try:
+                    mqtt.publish_screen_mode(updates["SCREEN_CONTROL_MODE"])
+                except Exception:
+                    log.exception("Failed to publish screen mode change")
 
             if "RECORDINGS_ROOT" in updates:
                 rr = updates["RECORDINGS_ROOT"] or config.RECORDINGS_ROOT
@@ -400,8 +407,6 @@ def settings():
                     state.temp_backlight_test = {"path": bp, "writable": True}
                 except Exception:
                     state.temp_backlight_test = {"path": bp, "writable": False}
-
-
 
         return redirect(url_for("settings"))
 
@@ -663,6 +668,10 @@ def api_settings():
         config.update_settings(**updates)
         if any(k.startswith("STREAM_") for k in updates):
             reconfigure_camera()
+        if "SCREEN_CONTROL_MODE" in updates:
+            from . import motion as motion_module
+            motion_module.apply_screen_mode()
+            mqtt.publish_screen_mode(updates["SCREEN_CONTROL_MODE"])
         mqtt.restart()
         broadcast_status()
 
@@ -679,6 +688,8 @@ def api_display():
         set_display(val)
         state.display_on = val
         mqtt.publish_display(val)
+        if val:
+            state.last_motion_time = time.time()
     if data.get("brightness") is not None:
         set_brightness(data["brightness"])
         mqtt.publish_brightness(data["brightness"])
@@ -805,6 +816,8 @@ if WEBSOCKET_ENABLED:
                         set_display(val)
                         state.display_on = val
                         mqtt.publish_display(val)
+                        if val:
+                            state.last_motion_time = time.time()
                         broadcast_status()
                     elif action == "set_brightness":
                         val = data.get("value", 100)

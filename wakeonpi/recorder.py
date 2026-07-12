@@ -36,12 +36,21 @@ class Recorder:
             frame = capture_main()
             h, w = frame.shape[:2]
 
+            try:
+                fps = float(config.current_settings().get("STREAM_FPS") or 10)
+                if fps <= 0:
+                    fps = 10.0
+            except Exception:
+                fps = 10.0
+
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            out = cv2.VideoWriter(path, fourcc, 10.0, (w, h))
+            out = cv2.VideoWriter(path, fourcc, fps, (w, h))
 
             if not out.isOpened():
                 log.error(f"Failed to open VideoWriter for {path}")
                 return
+
+            sleep_between = max(1.0 / fps, 0.001)
 
             while not self._stop.is_set():
                 frame = capture_main()
@@ -52,7 +61,7 @@ class Recorder:
                     bgr = frame
 
                 out.write(bgr)
-                time.sleep(0.1)
+                time.sleep(sleep_between)
 
             out.release()
 

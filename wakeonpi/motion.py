@@ -16,6 +16,7 @@ _motion_recording_stop_time = 0
 def _set_display_if_needed(val):
     mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
     if mode != "auto":
+        state.manual_display_override = False
         return
     if val != state.display_on:
         set_display(val)
@@ -106,8 +107,6 @@ def motion_detection_loop():
     _apply_screen_control_mode()
 
     while True:
-        # If the camera mode was switched (stream started/stopped), discard
-        # the stale prev_frame so we rebuild the baseline from scratch.
         if state.motion_prev_frame_stale:
             prev_frame = None
             state.motion_prev_frame_stale = False
@@ -116,7 +115,7 @@ def motion_detection_loop():
             lores_frame = capture_lores()
         except Exception:
             log.exception("Failed to capture lores frame")
-            prev_frame = None  # Ensure clean baseline after recovery
+            prev_frame = None
             time.sleep(config.CHECK_INTERVAL)
             continue
 
@@ -131,8 +130,11 @@ def motion_detection_loop():
                 is_motion = motion_score > config.MOTION_THRESHOLD
 
                 if state.manual_display_override:
+                    # User has manually toggled the display; respect their
+                    # choice for a full inactivity window before motion
+                    # automation takes over again.
                     prev_frame = gray
-                    time.sleep(60)
+                    time.sleep(max(config.INACTIVITY_TIMEOUT, 1))
                     state.manual_display_override = False
                     continue
 
@@ -159,15 +161,18 @@ def motion_detection_loop():
 
 def _apply_screen_control_mode():
     mode = config.current_settings().get("SCREEN_CONTROL_MODE", "auto")
+    state.manual_display_override = False
     if mode == "always_on":
-        set_display(True)
-        state.display_on = True
-        mqtt.publish_display(True)
+        if not state.display_on:
+            set_display(True)
+            state.display_on = True
+            mqtt.publish_display(True)
         log.info("Screen control mode: always_on")
     elif mode == "always_off":
-        set_display(False)
-        state.display_on = False
-        mqtt.publish_display(False)
+        if state.display_on:
+            set_display(False)
+            state.display_on = False
+            mqtt.publish_display(False)
         log.info("Screen control mode: always_off")
     else:
         log.info("Screen control mode: auto (motion-based)")
@@ -184,4 +189,12 @@ def start_motion_thread():
 
 
 def apply_screen_mode():
+    reset_motion_state()
     _apply_screen_control_mode()
+
+
+def reset_motion_state():
+    state.manual_display_override = False
+    state.motion_event = False
+    state.last_motion_time = 0
+    state.ignore_motion_until = 0

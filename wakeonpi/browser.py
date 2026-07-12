@@ -9,11 +9,7 @@ import urllib.request
 
 log = logging.getLogger("BrowserController")
 
-_DEFAULT_CHROMIUM_PATHS = [
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium-browser-stable",
-]
+_DEFAULT_CHROMIUM_PATHS = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium-browser-stable"]
 _lock = threading.Lock()
 _controller = None
 
@@ -26,7 +22,6 @@ class _BrowserController:
         self._ready_event = threading.Event()
         self._proc = None
         self.current_url = None
-        self._one_shot_url = None
         self._started = False
         self._url_monitor_thread = None
 
@@ -86,14 +81,12 @@ class _BrowserController:
                     url = self._get_browser_url_from_cdp()
                     if url and not url.startswith("about:"):
                         from . import state as _state
-
-                        last_published = getattr(_state, "browser_url", None)
+                        last_published = getattr(_state, 'browser_url', None)
                         if url != last_published:
                             log.info(f"Browser navigated to: {url}")
                             self.current_url = url
                             try:
                                 from . import mqtt
-
                                 mqtt.publish_browser_url(url)
                             except Exception:
                                 log.exception("Failed to publish browser URL")
@@ -140,7 +133,6 @@ class _BrowserController:
         self._cmd_queue.put((fn, resp_q))
         if not wait:
             return None
-
         ok, val = resp_q.get()
         if not ok:
             raise val
@@ -161,19 +153,10 @@ class _BrowserController:
         if not exe:
             raise RuntimeError("Chromium executable not found")
 
-        args = [
-            exe,
-            "--kiosk",
-            "--no-first-run",
-            "--disable-infobars",
-            "--remote-debugging-port=9222",
-            "--remote-debugging-address=127.0.0.1",
-            url,
-        ]
+        args = [exe, "--kiosk", "--no-first-run", "--disable-infobars",
+                "--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1", url]
         try:
-            self._proc = subprocess.Popen(
-                args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
+            self._proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.current_url = url
         except Exception:
             log.exception("Failed to start chromium")
@@ -182,7 +165,6 @@ class _BrowserController:
 
         try:
             from . import mqtt
-
             mqtt.publish_browser_url(url)
         except Exception:
             log.exception("Failed to publish browser URL")
@@ -194,14 +176,11 @@ class _BrowserController:
             if not url:
                 log.error("show_url called with empty URL")
                 return
-            if one_shot:
-                self._one_shot_url = url
-            else:
-                self.current_url = url
+            self.current_url = url
             try:
                 self._restart_process(url)
-            finally:
-                self._one_shot_url = None
+            except Exception:
+                log.exception("show_url failed")
 
         with _lock:
             self.ensure_started()
@@ -210,11 +189,20 @@ class _BrowserController:
     def refresh(self):
         def _do():
             from . import config
-
             default = config.current_settings().get("HASS_DASHBOARD_URL")
             url = default or self.current_url
-            if url:
+            if not url:
+                log.warning("refresh called with no URL configured")
+                return
+            try:
                 self._restart_process(url)
+            except Exception:
+                log.exception("refresh failed")
+
+        with _lock:
+            if not self._started:
+                self.ensure_started()
+            self._run_on_worker(_do)
 
         with _lock:
             if self._started:
